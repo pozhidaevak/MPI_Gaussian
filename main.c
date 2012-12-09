@@ -1,4 +1,4 @@
-#include <stdio.h>
+п»ї#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
@@ -6,21 +6,21 @@
 
 FILE *f_size, *f_matrix, *f_vector, *f_res, *f_time;
 
-int procQuantity;	// число доступных процессов
-int rank;	// ранг текущего процесса
+int procQuantity;	// С‡РёСЃР»Рѕ РґРѕСЃС‚СѓРїРЅС‹С… РїСЂРѕС†РµСЃСЃРѕРІ
+int rank;	// СЂР°РЅРі С‚РµРєСѓС‰РµРіРѕ РїСЂРѕС†РµСЃСЃР°
 
-int* pLeadingRows; // массив для запоминания порядка выбора ведущих строк - глобальный 
-int* pProcLeadingRowIter; // массив с номерами итераций, на которых строки данного процесса выбирались в качестве ведущей - локальный для каждого процесса           
+int* pLeadingRows; // РјР°СЃСЃРёРІ РґР»СЏ Р·Р°РїРѕРјРёРЅР°РЅРёСЏ РїРѕСЂСЏРґРєР° РІС‹Р±РѕСЂР° РІРµРґСѓС‰РёС… СЃС‚СЂРѕРє - РіР»РѕР±Р°Р»СЊРЅС‹Р№ 
+int* pProcLeadingRowIter; // РјР°СЃСЃРёРІ СЃ РЅРѕРјРµСЂР°РјРё РёС‚РµСЂР°С†РёР№, РЅР° РєРѕС‚РѕСЂС‹С… СЃС‚СЂРѕРєРё РґР°РЅРЅРѕРіРѕ РїСЂРѕС†РµСЃСЃР° РІС‹Р±РёСЂР°Р»РёСЃСЊ РІ РєР°С‡РµСЃС‚РІРµ РІРµРґСѓС‰РµР№ - Р»РѕРєР°Р»СЊРЅС‹Р№ РґР»СЏ РєР°Р¶РґРѕРіРѕ РїСЂРѕС†РµСЃСЃР°           
 
-int* pProcInd; // массив номеров первой строки, расположенной на процессе
-int* pProcNum; // количество строк линейной системы, расположенных на процессе
+int* pProcInd; // РјР°СЃСЃРёРІ РЅРѕРјРµСЂРѕРІ РїРµСЂРІРѕР№ СЃС‚СЂРѕРєРё, СЂР°СЃРїРѕР»РѕР¶РµРЅРЅРѕР№ РЅР° РїСЂРѕС†РµСЃСЃРµ
+int* pProcNum; // РєРѕР»РёС‡РµСЃС‚РІРѕ СЃС‚СЂРѕРє Р»РёРЅРµР№РЅРѕР№ СЃРёСЃС‚РµРјС‹, СЂР°СЃРїРѕР»РѕР¶РµРЅРЅС‹С… РЅР° РїСЂРѕС†РµСЃСЃРµ
 
 
-// функция для выделения памяти и инициализации данных
+// С„СѓРЅРєС†РёСЏ РґР»СЏ РІС‹РґРµР»РµРЅРёСЏ РїР°РјСЏС‚Рё Рё РёРЅРёС†РёР°Р»РёР·Р°С†РёРё РґР°РЅРЅС‹С…
 void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRows, 
 							double* &pProcVector, double* &pProcResult, int &Size, int &RowNum) 
 {
-  int RestRows; // оставшиеся строки - которые еще не были распределены
+  int RestRows; // РѕСЃС‚Р°РІС€РёРµСЃСЏ СЃС‚СЂРѕРєРё - РєРѕС‚РѕСЂС‹Рµ РµС‰Рµ РЅРµ Р±С‹Р»Рё СЂР°СЃРїСЂРµРґРµР»РµРЅС‹
   int i,j;       
 
   if (rank == 0)
@@ -64,15 +64,15 @@ void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRo
     pVector = new double [Size];
     pResult = new double [Size];
 
-	//генерация вектора правых частей системы с помощью датчика случайных чисел
+	//РіРµРЅРµСЂР°С†РёСЏ РІРµРєС‚РѕСЂР° РїСЂР°РІС‹С… С‡Р°СЃС‚РµР№ СЃРёСЃС‚РµРјС‹ СЃ РїРѕРјРѕС‰СЊСЋ РґР°С‚С‡РёРєР° СЃР»СѓС‡Р°Р№РЅС‹С… С‡РёСЃРµР»
 	srand(unsigned(clock()));
 
 	for (i=0; i<Size; i++)
 		pVector[i] = (double) (rand() % ( 10000 - (-10000) + 1)+(-10000))/100;
   }
 
-  // определяем, сколько строк будет храниться в каждом процессе
-  // заполняем глоб. массивы pProcInd, pProcNum
+  // РѕРїСЂРµРґРµР»СЏРµРј, СЃРєРѕР»СЊРєРѕ СЃС‚СЂРѕРє Р±СѓРґРµС‚ С…СЂР°РЅРёС‚СЊСЃСЏ РІ РєР°Р¶РґРѕРј РїСЂРѕС†РµСЃСЃРµ
+  // Р·Р°РїРѕР»РЅСЏРµРј РіР»РѕР±. РјР°СЃСЃРёРІС‹ pProcInd, pProcNum
   RestRows = Size;
   pProcInd[0] = 0;
   pProcNum[0] = Size/procQuantity;
@@ -84,24 +84,24 @@ void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRo
     pProcInd[i] = pProcInd[i-1]+pProcNum[i-1];
   }
 
-  // генерируем строки матрицы на каждом процессе
+  // РіРµРЅРµСЂРёСЂСѓРµРј СЃС‚СЂРѕРєРё РјР°С‚СЂРёС†С‹ РЅР° РєР°Р¶РґРѕРј РїСЂРѕС†РµСЃСЃРµ
   for (i=0; i<pProcNum[rank]*Size; i++)
   {  
 	pProcRows[i] = (double) (rand() % ( 10000 - (-10000) + 1)+(-10000))/100;
   }
 
-  // рассылаем вектор правых частей системы  по процессам  
+  // СЂР°СЃСЃС‹Р»Р°РµРј РІРµРєС‚РѕСЂ РїСЂР°РІС‹С… С‡Р°СЃС‚РµР№ СЃРёСЃС‚РµРјС‹  РїРѕ РїСЂРѕС†РµСЃСЃР°Рј  
   MPI_Scatterv(pVector, pProcNum, pProcInd, MPI_DOUBLE, pProcVector, pProcNum[rank], MPI_DOUBLE, 0, MPI_COMM_WORLD);               
 }
 
-// Функция преобразования матрицы
+// Р¤СѓРЅРєС†РёСЏ РїСЂРµРѕР±СЂР°Р·РѕРІР°РЅРёСЏ РјР°С‚СЂРёС†С‹
 void ColumnElimination(double* pProcRows, double* pProcVector, double* pLeadingRow, int Size, int RowNum, int Iter) 
 {
-  double multiplier; // множитель 
+  double multiplier; // РјРЅРѕР¶РёС‚РµР»СЊ 
 
   for (int i=0; i<RowNum; i++) 
   {
-    if (pProcLeadingRowIter[i] == -1) // строка еще не была ведущей
+    if (pProcLeadingRowIter[i] == -1) // СЃС‚СЂРѕРєР° РµС‰Рµ РЅРµ Р±С‹Р»Р° РІРµРґСѓС‰РµР№
 	{
       multiplier = pProcRows[i*Size+Iter] / pLeadingRow[Iter]; 
 
@@ -115,20 +115,20 @@ void ColumnElimination(double* pProcRows, double* pProcVector, double* pLeadingR
   }    
 }
 
-// Прямой ход алгоритма Гаусса
+// РџСЂСЏРјРѕР№ С…РѕРґ Р°Р»РіРѕСЂРёС‚РјР° Р“Р°СѓСЃСЃР°
 void GaussianElimination (double* pProcRows, double* pProcVector, int Size, int RowNum)
 {
-  double MaxValue;   // здачение ведущего элемента на данном процессе
-  int    LeadingRowPos;   // позиция ведущей строки в процессе
+  double MaxValue;   // Р·РґР°С‡РµРЅРёРµ РІРµРґСѓС‰РµРіРѕ СЌР»РµРјРµРЅС‚Р° РЅР° РґР°РЅРЅРѕРј РїСЂРѕС†РµСЃСЃРµ
+  int    LeadingRowPos;   // РїРѕР·РёС†РёСЏ РІРµРґСѓС‰РµР№ СЃС‚СЂРѕРєРё РІ РїСЂРѕС†РµСЃСЃРµ
 
-  struct { double MaxValue; int rank; } ProcLeadingRow, LeadingRow;   // структура для ведущей строки
+  struct { double MaxValue; int rank; } ProcLeadingRow, LeadingRow;   // СЃС‚СЂСѓРєС‚СѓСЂР° РґР»СЏ РІРµРґСѓС‰РµР№ СЃС‚СЂРѕРєРё
 
-  // хранит ведущую строку и элемент вектора правой части
+  // С…СЂР°РЅРёС‚ РІРµРґСѓС‰СѓСЋ СЃС‚СЂРѕРєСѓ Рё СЌР»РµРјРµРЅС‚ РІРµРєС‚РѕСЂР° РїСЂР°РІРѕР№ С‡Р°СЃС‚Рё
   double* pLeadingRow = new double [Size+1];
 
   for (int i = 0; i < Size; i++)  
   { 
-    // вычисляем локальную ведущую строку
+    // РІС‹С‡РёСЃР»СЏРµРј Р»РѕРєР°Р»СЊРЅСѓСЋ РІРµРґСѓС‰СѓСЋ СЃС‚СЂРѕРєСѓ
     double MaxValue = 0;             
 
 	for (int j = 0; j < RowNum; j++) 
@@ -142,22 +142,22 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int Size, int 
     ProcLeadingRow.MaxValue = MaxValue;
     ProcLeadingRow.rank = rank;
 
-	// определяем максимальный среди полученных ведущих элементов процессов
+	// РѕРїСЂРµРґРµР»СЏРµРј РјР°РєСЃРёРјР°Р»СЊРЅС‹Р№ СЃСЂРµРґРё РїРѕР»СѓС‡РµРЅРЅС‹С… РІРµРґСѓС‰РёС… СЌР»РµРјРµРЅС‚РѕРІ РїСЂРѕС†РµСЃСЃРѕРІ
     MPI_Allreduce(&ProcLeadingRow, &LeadingRow, 1, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
 
     if (rank == LeadingRow.rank)
 	{
-      // запоминаем порядок выбора ведущих строк 
-      pProcLeadingRowIter[LeadingRowPos]= i; // номер итерации
+      // Р·Р°РїРѕРјРёРЅР°РµРј РїРѕСЂСЏРґРѕРє РІС‹Р±РѕСЂР° РІРµРґСѓС‰РёС… СЃС‚СЂРѕРє 
+      pProcLeadingRowIter[LeadingRowPos]= i; // РЅРѕРјРµСЂ РёС‚РµСЂР°С†РёРё
       pLeadingRows[i]= pProcInd[rank] + LeadingRowPos;
 	}
 
-	// выполняем широковещательную рассылку номера ведущей строки   
+	// РІС‹РїРѕР»РЅСЏРµРј С€РёСЂРѕРєРѕРІРµС‰Р°С‚РµР»СЊРЅСѓСЋ СЂР°СЃСЃС‹Р»РєСѓ РЅРѕРјРµСЂР° РІРµРґСѓС‰РµР№ СЃС‚СЂРѕРєРё   
     MPI_Bcast(&pLeadingRows[i], 1, MPI_INT, LeadingRow.rank, MPI_COMM_WORLD); 
       
     if (rank == LeadingRow.rank)
 	{
-      // заполняем ведущую строку + записываем элемент вектора правой части
+      // Р·Р°РїРѕР»РЅСЏРµРј РІРµРґСѓС‰СѓСЋ СЃС‚СЂРѕРєСѓ + Р·Р°РїРёСЃС‹РІР°РµРј СЌР»РµРјРµРЅС‚ РІРµРєС‚РѕСЂР° РїСЂР°РІРѕР№ С‡Р°СЃС‚Рё
       for (int j=0; j<Size; j++) 
 	  {
         pLeadingRow[j] = pProcRows[LeadingRowPos*Size + j];
@@ -165,54 +165,54 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int Size, int 
       pLeadingRow[Size] = pProcVector[LeadingRowPos];
     }
 
-	// выполняем широковещательную рассылку ведущей строки и элемента вектора правой части
+	// РІС‹РїРѕР»РЅСЏРµРј С€РёСЂРѕРєРѕРІРµС‰Р°С‚РµР»СЊРЅСѓСЋ СЂР°СЃСЃС‹Р»РєСѓ РІРµРґСѓС‰РµР№ СЃС‚СЂРѕРєРё Рё СЌР»РµРјРµРЅС‚Р° РІРµРєС‚РѕСЂР° РїСЂР°РІРѕР№ С‡Р°СЃС‚Рё
     MPI_Bcast(pLeadingRow, Size+1, MPI_DOUBLE, LeadingRow.rank, MPI_COMM_WORLD);
 
-	// выполняем вычитание строк- исключаем соответствующую неизвестную
+	// РІС‹РїРѕР»РЅСЏРµРј РІС‹С‡РёС‚Р°РЅРёРµ СЃС‚СЂРѕРє- РёСЃРєР»СЋС‡Р°РµРј СЃРѕРѕС‚РІРµС‚СЃС‚РІСѓСЋС‰СѓСЋ РЅРµРёР·РІРµСЃС‚РЅСѓСЋ
     ColumnElimination(pProcRows, pProcVector, pLeadingRow, Size, RowNum, i);
   }
 }
 
-// Функция поиска расположения ведущей строки при обратном ходе
+// Р¤СѓРЅРєС†РёСЏ РїРѕРёСЃРєР° СЂР°СЃРїРѕР»РѕР¶РµРЅРёСЏ РІРµРґСѓС‰РµР№ СЃС‚СЂРѕРєРё РїСЂРё РѕР±СЂР°С‚РЅРѕРј С…РѕРґРµ
 void FindBackLeadingRow(int RowIndex, int Size, int &IterRank, int &IterLeadingRowPos) 
 {
   for (int i = 0; i < procQuantity-1; i++) 
   {
-	// если строка находится в ленте данного процесса 
+	// РµСЃР»Рё СЃС‚СЂРѕРєР° РЅР°С…РѕРґРёС‚СЃСЏ РІ Р»РµРЅС‚Рµ РґР°РЅРЅРѕРіРѕ РїСЂРѕС†РµСЃСЃР° 
     if ((pProcInd[i] <= RowIndex) && (RowIndex < pProcInd[i+1]))
 	  IterRank = i;
   }
   if (RowIndex >= pProcInd[procQuantity-1])
     IterRank = procQuantity-1;
 
-  // позиция строки в данном процессе
+  // РїРѕР·РёС†РёСЏ СЃС‚СЂРѕРєРё РІ РґР°РЅРЅРѕРј РїСЂРѕС†РµСЃСЃРµ
   IterLeadingRowPos = RowIndex - pProcInd[IterRank];
 }
 
-// Обратный ход алгоритма Гаусса
+// РћР±СЂР°С‚РЅС‹Р№ С…РѕРґ Р°Р»РіРѕСЂРёС‚РјР° Р“Р°СѓСЃСЃР°
 void BackSubstitution (double* pProcRows, double* pProcVector, double* pProcResult, int Size, int RowNum) 
 {
-  int IterRank;    // ранг процесса, на котором находится текущая ведущая строка
-  int IterLeadingRowPos;   // позиция ведущей строки в процессе
-  double IterResult;   // значение элемента результирующего вектора, вычисленное на данной итерации
+  int IterRank;    // СЂР°РЅРі РїСЂРѕС†РµСЃСЃР°, РЅР° РєРѕС‚РѕСЂРѕРј РЅР°С…РѕРґРёС‚СЃСЏ С‚РµРєСѓС‰Р°СЏ РІРµРґСѓС‰Р°СЏ СЃС‚СЂРѕРєР°
+  int IterLeadingRowPos;   // РїРѕР·РёС†РёСЏ РІРµРґСѓС‰РµР№ СЃС‚СЂРѕРєРё РІ РїСЂРѕС†РµСЃСЃРµ
+  double IterResult;   // Р·РЅР°С‡РµРЅРёРµ СЌР»РµРјРµРЅС‚Р° СЂРµР·СѓР»СЊС‚РёСЂСѓСЋС‰РµРіРѕ РІРµРєС‚РѕСЂР°, РІС‹С‡РёСЃР»РµРЅРЅРѕРµ РЅР° РґР°РЅРЅРѕР№ РёС‚РµСЂР°С†РёРё
   double val;
 
   for (int i = Size-1; i >= 0; i--) 
   {
-	// ищем ведущую строку - начинаем с конца массива
+	// РёС‰РµРј РІРµРґСѓС‰СѓСЋ СЃС‚СЂРѕРєСѓ - РЅР°С‡РёРЅР°РµРј СЃ РєРѕРЅС†Р° РјР°СЃСЃРёРІР°
 	FindBackLeadingRow(pLeadingRows[i], Size, IterRank, IterLeadingRowPos);
     
-    // вычисляем неизвестное
+    // РІС‹С‡РёСЃР»СЏРµРј РЅРµРёР·РІРµСЃС‚РЅРѕРµ
     if (rank == IterRank) 
 	{
       IterResult = pProcVector[IterLeadingRowPos]/pProcRows[IterLeadingRowPos*Size+i];
 	  pProcResult[IterLeadingRowPos] = IterResult;
     }
 
-    // рассылаем полученное значение элемента результирующего вектора
+    // СЂР°СЃСЃС‹Р»Р°РµРј РїРѕР»СѓС‡РµРЅРЅРѕРµ Р·РЅР°С‡РµРЅРёРµ СЌР»РµРјРµРЅС‚Р° СЂРµР·СѓР»СЊС‚РёСЂСѓСЋС‰РµРіРѕ РІРµРєС‚РѕСЂР°
     MPI_Bcast(&IterResult, 1, MPI_DOUBLE, IterRank, MPI_COMM_WORLD);
 
-    // обновляем значения результирующего вектора 
+    // РѕР±РЅРѕРІР»СЏРµРј Р·РЅР°С‡РµРЅРёСЏ СЂРµР·СѓР»СЊС‚РёСЂСѓСЋС‰РµРіРѕ РІРµРєС‚РѕСЂР° 
     for (int j = 0; j < RowNum; j++) 
       if (pProcLeadingRowIter[j] < i) 
 	  {
@@ -222,7 +222,7 @@ void BackSubstitution (double* pProcRows, double* pProcVector, double* pProcResu
   }
 }
 
-// Функция завершения вычислений - освобождение памяти
+// Р¤СѓРЅРєС†РёСЏ Р·Р°РІРµСЂС€РµРЅРёСЏ РІС‹С‡РёСЃР»РµРЅРёР№ - РѕСЃРІРѕР±РѕР¶РґРµРЅРёРµ РїР°РјСЏС‚Рё
 void ProcessTermination (double* pVector, double* pResult, double* pProcRows, double* pProcVector, double* pProcResult) 
 {
   if (rank == 0) 
@@ -244,26 +244,26 @@ void ProcessTermination (double* pVector, double* pResult, double* pProcRows, do
 
 int main(int argc, char* argv[]) 
 {
-  double* pVector;  // вектор правых частей системы
-  double* pResult;  // результирующий вектор
-  int	  Size;     // размер матрицы
+  double* pVector;  // РІРµРєС‚РѕСЂ РїСЂР°РІС‹С… С‡Р°СЃС‚РµР№ СЃРёСЃС‚РµРјС‹
+  double* pResult;  // СЂРµР·СѓР»СЊС‚РёСЂСѓСЋС‰РёР№ РІРµРєС‚РѕСЂ
+  int	  Size;     // СЂР°Р·РјРµСЂ РјР°С‚СЂРёС†С‹
   
-  double *pProcRows;      // строки матрицы на данном процессе
-  double *pProcVector;    // элементы вектора правых частей системы на данном процессе
-  double *pProcResult;    // элементы результирующего вектора на данном процессе
-  int     RowNum;         // количество строк матрицы, обрабатываемых данным процессом
+  double *pProcRows;      // СЃС‚СЂРѕРєРё РјР°С‚СЂРёС†С‹ РЅР° РґР°РЅРЅРѕРј РїСЂРѕС†РµСЃСЃРµ
+  double *pProcVector;    // СЌР»РµРјРµРЅС‚С‹ РІРµРєС‚РѕСЂР° РїСЂР°РІС‹С… С‡Р°СЃС‚РµР№ СЃРёСЃС‚РµРјС‹ РЅР° РґР°РЅРЅРѕРј РїСЂРѕС†РµСЃСЃРµ
+  double *pProcResult;    // СЌР»РµРјРµРЅС‚С‹ СЂРµР·СѓР»СЊС‚РёСЂСѓСЋС‰РµРіРѕ РІРµРєС‚РѕСЂР° РЅР° РґР°РЅРЅРѕРј РїСЂРѕС†РµСЃСЃРµ
+  int     RowNum;         // РєРѕР»РёС‡РµСЃС‚РІРѕ СЃС‚СЂРѕРє РјР°С‚СЂРёС†С‹, РѕР±СЂР°Р±Р°С‚С‹РІР°РµРјС‹С… РґР°РЅРЅС‹Рј РїСЂРѕС†РµСЃСЃРѕРј
 
-  double  start, finish, duration; // для подсчета времени вычислений
+  double  start, finish, duration; // РґР»СЏ РїРѕРґСЃС‡РµС‚Р° РІСЂРµРјРµРЅРё РІС‹С‡РёСЃР»РµРЅРёР№
 
   MPI_Init ( &argc, &argv );
   MPI_Comm_rank ( MPI_COMM_WORLD, &rank );
   MPI_Comm_size ( MPI_COMM_WORLD, &procQuantity );
   
-  // выделение памяти и инициализация данных, распределение строк матрицы между процессами
+  // РІС‹РґРµР»РµРЅРёРµ РїР°РјСЏС‚Рё Рё РёРЅРёС†РёР°Р»РёР·Р°С†РёСЏ РґР°РЅРЅС‹С…, СЂР°СЃРїСЂРµРґРµР»РµРЅРёРµ СЃС‚СЂРѕРє РјР°С‚СЂРёС†С‹ РјРµР¶РґСѓ РїСЂРѕС†РµСЃСЃР°РјРё
   ProcessInitialization(pVector, pResult, pProcRows, pProcVector, pProcResult, Size, RowNum);
 
 /*
-  // вывод в файл исходной матрицы, сгенерированной случайным образом
+  // РІС‹РІРѕРґ РІ С„Р°Р№Р» РёСЃС…РѕРґРЅРѕР№ РјР°С‚СЂРёС†С‹, СЃРіРµРЅРµСЂРёСЂРѕРІР°РЅРЅРѕР№ СЃР»СѓС‡Р°Р№РЅС‹Рј РѕР±СЂР°Р·РѕРј
   for (int i=0; i<procQuantity; i++) 
   {
 	if (rank == i) 
@@ -285,40 +285,40 @@ int main(int argc, char* argv[])
 	MPI_Barrier(MPI_COMM_WORLD);
   }
 */
-  // включаем таймер
+  // РІРєР»СЋС‡Р°РµРј С‚Р°Р№РјРµСЂ
   start = MPI_Wtime();
 
-  // вычисление результирующего вектора по методу Гаусса с выбором главного элемента в столбце
-  // прямой ход
+  // РІС‹С‡РёСЃР»РµРЅРёРµ СЂРµР·СѓР»СЊС‚РёСЂСѓСЋС‰РµРіРѕ РІРµРєС‚РѕСЂР° РїРѕ РјРµС‚РѕРґСѓ Р“Р°СѓСЃСЃР° СЃ РІС‹Р±РѕСЂРѕРј РіР»Р°РІРЅРѕРіРѕ СЌР»РµРјРµРЅС‚Р° РІ СЃС‚РѕР»Р±С†Рµ
+  // РїСЂСЏРјРѕР№ С…РѕРґ
   GaussianElimination (pProcRows, pProcVector, Size, RowNum);
 
-  // обратный ход
+  // РѕР±СЂР°С‚РЅС‹Р№ С…РѕРґ
   BackSubstitution (pProcRows, pProcVector, pProcResult, Size, RowNum);
  
-  // объединяем полученные на каждом процессоре результаты 
+  // РѕР±СЉРµРґРёРЅСЏРµРј РїРѕР»СѓС‡РµРЅРЅС‹Рµ РЅР° РєР°Р¶РґРѕРј РїСЂРѕС†РµСЃСЃРѕСЂРµ СЂРµР·СѓР»СЊС‚Р°С‚С‹ 
   MPI_Gatherv(pProcResult, pProcNum[rank], MPI_DOUBLE, pResult, pProcNum, pProcInd, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 
-  // останавливаем таймер
+  // РѕСЃС‚Р°РЅР°РІР»РёРІР°РµРј С‚Р°Р№РјРµСЂ
   finish = MPI_Wtime();
   duration = finish-start;
   
-  // запись результатов в файлы
+  // Р·Р°РїРёСЃСЊ СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ РІ С„Р°Р№Р»С‹
    
   if (rank == 0) 
   {/*
-	// вывод в файл исходного вектора
+	// РІС‹РІРѕРґ РІ С„Р°Р№Р» РёСЃС…РѕРґРЅРѕРіРѕ РІРµРєС‚РѕСЂР°
 	f_vector = fopen("vector.txt", "w");
 	for (int i=0; i<Size; i++)
 		fprintf(f_vector,"%7.4f ", pVector[i]);
 	fclose(f_vector);
 
-	// вывод результата
+	// РІС‹РІРѕРґ СЂРµР·СѓР»СЊС‚Р°С‚Р°
 	f_res = fopen("result.txt", "w");
 	for (int i=0; i<Size; i++)
 		fprintf(f_res,"%7.4f ", pResult[pLeadingRows[i]]);
 	fclose(f_res);
 	*/
-	// вывод значения времени, затраченного на вычисления
+	// РІС‹РІРѕРґ Р·РЅР°С‡РµРЅРёСЏ РІСЂРµРјРµРЅРё, Р·Р°С‚СЂР°С‡РµРЅРЅРѕРіРѕ РЅР° РІС‹С‡РёСЃР»РµРЅРёСЏ
 	f_time = fopen("time.txt", "a+");
     fprintf(f_time, " Number of processors: %d\n Size of Matrix: %d\n Time of execution: %f\n\n", procQuantity, Size, duration);
     fclose(f_time);
@@ -331,7 +331,7 @@ int main(int argc, char* argv[])
 	*/
   }
 
-  // Завершение процесса вычислений
+  // Р—Р°РІРµСЂС€РµРЅРёРµ РїСЂРѕС†РµСЃСЃР° РІС‹С‡РёСЃР»РµРЅРёР№
   ProcessTermination(pVector, pResult, pProcRows, pProcVector, pProcResult);
   MPI_Finalize();
   return 0;
