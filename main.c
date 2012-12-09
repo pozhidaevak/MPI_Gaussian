@@ -85,16 +85,16 @@ void ColumnElimination(double* pProcRows, double* pProcVector, double* pLeadingR
   //по строкам
   for (int i=0; i < pProcNum[rank]; i++) 
   {
-    if (pProcLeadingRowIter[i] == -1) // строка еще не была ведущей
+    if (Iter < pProcInd[rank] + i) // строка еще не была ведущей
     {
-      multiplier = pProcRows[i*mSize+Iter] / pLeadingRow[Iter]; 
+      multiplier = pProcRows[i * mSize + Iter] / pLeadingRow[Iter]; 
 
-      for (int j=Iter; j<mSize; j++) 
+      for (int j=Iter; j < mSize; j++) 
       {
-        pProcRows[i*mSize + j] -= pLeadingRow[j]*multiplier;
+        pProcRows[i*mSize + j] -= pLeadingRow[j] * multiplier;
       }
 
-      pProcVector[i] -= pLeadingRow[mSize]*multiplier;
+      pProcVector[i] -= pLeadingRow[mSize] * multiplier;
     }
   }    
 }
@@ -108,7 +108,7 @@ void ColumnElimination(double* pProcRows, double* pProcVector, double* pLeadingR
  */
 void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 {
-  double MaxValue;   // здачение ведущего элемента на данном процессе
+  /*double MaxValue;   // здачение ведущего элемента на данном процессе
   int    LeadingRowPos;   // позиция ведущей строки в процессе
 
   struct { double MaxValue; int rank; } ProcLeadingRow, LeadingRow;   // структура для ведущей строки
@@ -134,7 +134,7 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 
     // определяем максимальный среди полученных ведущих элементов процессов
     MPI_Allreduce(&ProcLeadingRow, &LeadingRow, 1, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
-
+    
     if (rank == LeadingRow.rank)
     {
       // запоминаем порядок выбора ведущих строк 
@@ -143,16 +143,28 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
     }
 
     // выполняем широковещательную рассылку номера ведущей строки   
-    MPI_Bcast(&pLeadingRows[i], 1, MPI_INT, LeadingRow.rank, MPI_COMM_WORLD); 
-      
-    if (rank == LeadingRow.rank)
+    MPI_Bcast(&pLeadingRows[i], 1, MPI_INT, LeadingRow.rank, MPI_COMM_WORLD);*/ 
+    
+    //Вычисляем ранг катой строки
+    int leadingRowRank = size - 1;
+    for (int i = 1; i < size ; ++i)
     {
+      if( k < pProcInd[i]  )
+      {
+        leadingRowRank = i - 1;
+        break;
+      }
+    }
+      
+    if (rank == LeadingRowRank)
+    {
+      int leadingRowPos = k - pProcInd[ledingRowRank];
       // заполняем ведущую строку + записываем элемент вектора правой части
       for (int j=0; j<mSize; j++) 
       {
-        pLeadingRow[j] = pProcRows[LeadingRowPos*mSize + j];
+        pLeadingRow[j] = pProcRows[leadingRowPos*mSize + j];
       }
-      pLeadingRow[mSize] = pProcVector[LeadingRowPos];
+      pLeadingRow[mSize] = pProcVector[leadingRowPos];
     }
 
     // выполняем широковещательную рассылку ведущей строки и элемента вектора правой части
