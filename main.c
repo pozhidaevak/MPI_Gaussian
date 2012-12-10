@@ -25,7 +25,9 @@ FILE *f_size, *f_matrix, *f_vector, *f_res, *f_time;
 
 int size;  // число доступных процессов
 int rank;  // ранг текущего процесса
-
+#ifdef GAZI
+int* colShift; // array with order of column shifting
+#endif
 //int* pLeadingRows; // массив для запоминания порядка выбора ведущих строк - глобальный 
 //int* pProcLeadingRowIter; // массив с номерами итераций, на которых строки данного процесса выбирались в качестве ведущей - локальный для каждого процесса           
 
@@ -41,7 +43,10 @@ void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRo
 
   //рассчитьтать кол-во и начальную строку для каждого процесса TODO may be MPI_SCatter?
   pProcInd = (int*)malloc(sizeof(int) * size);   
-  pProcNum = (int*)malloc(sizeof(int) * size);  
+  pProcNum = (int*)malloc(sizeof(int) * size);
+  #ifdef GAZI 
+  colShift = (int*)malloc(sizeof(int)*mSize);
+  #endif 
   pProcInd[0] = 0;
   pProcNum[0] = mSize / size;
   int remains = size - (mSize % size); // кол-во процессов с mSize / size строк, у остальных на одну больше
@@ -66,7 +71,7 @@ void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRo
   
   //for (int i=0; i<pProcNum[rank]; i++)   
   //  pProcLeadingRowIter[i] = -1;
-srand(time(NULL)+ rank);
+  srand(time(NULL)+ rank);
   if (!rank) 
   {
     pVector = (double*)malloc(sizeof(double) * mSize);
@@ -180,24 +185,41 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 
     // выполняем широковещательную рассылку номера ведущей строки   
     MPI_Bcast(&pLeadingRows[i], 1, MPI_INT, LeadingRow.rank, MPI_COMM_WORLD);*/ 
-	#define LOL mSize - 1
-    if(i == LOL)
-	{
-		START();
-	}
+	
     //Вычисляем ранг и смещение катой строки
     int leadingRowRank;
     int leadingRowPos;
     RowIndToRankAndOffset(i, mSize, leadingRowRank, leadingRowPos);
-	if(i == LOL)
-	{
-		END("RowInd");
-	}
-     
-	if(i == LOL)
-	{
-		START();
-	}
+    #ifdef GAZI
+
+     // find max col from i in i-th row
+    double MaxValue = -1;
+    double maxCol = -1;
+    if( rank == leadingRowRank)
+    {             
+      for (int j = i; j < mSize; j++) 
+      {
+          if (MaxValue < fabs(pProcRows[leadingRowPos * mSize + j]))) 
+          {
+            MaxValue = fabs(pProcRows[leadingRowPos * mSize + j]);
+             maxCol = j; 
+          }
+      }
+      assert(MaxValue > 0); // matrix must be not singular
+       colShift[i] = maxCol;
+    } 
+    MPI_Bcast(colShift, mSize, MPI_INT, leadingRowRank,MPI_COMM_WORLD);
+   
+    if ( maxCol != i) //если перестановка  нужна
+    {
+      for(int j = 0; j < pProcNum[rank]; ++j)
+      {
+        pProcRows[j * mSize + i] ^= pProcRows[j * mSize + maxCol] ^= pProcRows[j * mSize + i] ^= pProcRows[j * mSize + maxCol]
+      }
+    }
+    
+    #endif
+	
     if (rank == leadingRowRank)
     {
       // заполняем ведущую строку + записываем элемент вектора правой части
@@ -207,27 +229,14 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
       }
       pLeadingRow[mSize] = pProcVector[leadingRowPos];
     }
-	if(i == LOL)
-	{
-		END("baseLine input");
-	}
-	if(i == LOL)
-	{
-		START();
-	}
+	
     // выполняем широковещательную рассылку ведущей строки и элемента вектора правой части
     MPI_Bcast(pLeadingRow, mSize + 1, MPI_DOUBLE, leadingRowRank, MPI_COMM_WORLD);
-	if(i == LOL)
-	{
-		END("baseLine Bcast");
-	}
+	
     // выполняем вычитание строк- исключаем соответствующую неизвестную
 
     ColumnElimination(pProcRows, pProcVector, pLeadingRow, mSize, i);
-	if(i == LOL)
-	{
-		END("columnElimintaion");
-	}
+	
     
   }
   free(pLeadingRow);
@@ -282,6 +291,9 @@ void ProcessTermination (double* &pVector, double* &pResult, double* &pProcRows,
   //free(pProcLeadingRowIter);
   free(pProcInd);
   free(pProcNum);
+  #ifdef GAZI
+  free(colShift);
+  #endif
 }
 
 int main(int argc, char* argv[]) 
@@ -375,7 +387,13 @@ int main(int argc, char* argv[])
   // вывод результата
   f_res = fopen("result.txt", "w");
   for (int i=0; i<mSize; i++)
+  {
+    #ifdef GAZI
+    fprintf(f_res,"%7.4f ", pResult[colShift[i]]);
+    #else
     fprintf(f_res,"%7.4f ", pResult[i]);
+    #endif
+  }
   fclose(f_res);
   /**/
   // вывод значения времени, затраченного на вычисления
