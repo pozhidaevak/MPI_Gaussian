@@ -160,7 +160,7 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
     {
       int leadingRowPos = k - pProcInd[ledingRowRank];
       // заполняем ведущую строку + записываем элемент вектора правой части
-      for (int j=0; j<mSize; j++) 
+      for (int j = 0; j < mSize; ++j) 
       {
         pLeadingRow[j] = pProcRows[leadingRowPos*mSize + j];
       }
@@ -168,7 +168,7 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
     }
 
     // выполняем широковещательную рассылку ведущей строки и элемента вектора правой части
-    MPI_Bcast(pLeadingRow, mSize+1, MPI_DOUBLE, LeadingRow.rank, MPI_COMM_WORLD);
+    MPI_Bcast(pLeadingRow, mSize + 1, MPI_DOUBLE, LeadingRow.rank, MPI_COMM_WORLD);
 
     // выполняем вычитание строк- исключаем соответствующую неизвестную
     ColumnElimination(pProcRows, pProcVector, pLeadingRow, mSize, i);
@@ -176,19 +176,23 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 }
 
 // Функция поиска расположения ведущей строки при обратном ходе
-void FindBackLeadingRow(int RowIndex, int mSize, int &IterRank, int &IterLeadingRowPos) 
+void RowIndToRankAndOffset(int rowInd, int mSize, int &iterRank, int &iterOffset) 
 {
-  for (int i = 0; i < size-1; i++) 
+  assert(rowInd < mSize);
+  for (int i = 0; i < size - 1; i++) 
   {
-  // если строка находится в ленте данного процесса 
-    if ((pProcInd[i] <= RowIndex) && (RowIndex < pProcInd[i+1]))
-    IterRank = i;
+  // если строка находится в строках данного процесса 
+    if ((pProcInd[i] <= rowInd) && (rowInd < pProcInd[i + 1]))
+    {
+      iterRank = i;
+      break;
+    }
   }
-  if (RowIndex >= pProcInd[size-1])
-    IterRank = size-1;
+  if (rowInd >= pProcInd[size - 1])
+    iterRank = size - 1;
 
   // позиция строки в данном процессе
-  IterLeadingRowPos = RowIndex - pProcInd[IterRank];
+  iterOffset = rowInd - pProcInd[iterRank];
 }
 
 // Обратный ход алгоритма Гаусса
@@ -202,7 +206,7 @@ void BackSubstitution (double* pProcRows, double* pProcVector, double* pProcResu
   for (int i = mSize-1; i >= 0; i--) 
   {
   // ищем ведущую строку - начинаем с конца массива
-  FindBackLeadingRow(pLeadingRows[i], mSize, IterRank, IterLeadingRowPos);
+  RowIndToRankAndOffset(pLeadingRows[i], mSize, IterRank, IterLeadingRowPos);
     
     // вычисляем неизвестное
     if (rank == IterRank) 
@@ -229,19 +233,19 @@ void ProcessTermination (double* pVector, double* pResult, double* pProcRows, do
 {
   if (!rank) 
   {
-    delete [] pVector;
-    delete [] pResult;
+     free(pVector);
+     free(pResult);
   }
 
   free(pProcRows);
-  delete [] pProcVector;
-  delete [] pProcResult;
+  free(pProcVector);
+  free(pProcResult);
 
-  delete [] pLeadingRows;
-  delete [] pProcLeadingRowIter;
+  free(pLeadingRows);
+  free(pProcLeadingRowIter);
 
-  delete [] pProcInd;
-  delete [] pProcNum;
+  free(pProcInd);
+  free(pProcNum);
 }
 
 int main(int argc, char* argv[]) 
