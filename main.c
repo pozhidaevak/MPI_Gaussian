@@ -5,6 +5,7 @@
 #include <mpi.h>
 #include <assert.h>
 
+#define GAZI
 #define MY_RND (double)(rand() + 1) / RAND_MAX
 //#define NDEBUG
 #define NOMPI
@@ -46,6 +47,10 @@ void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRo
   pProcNum = (int*)malloc(sizeof(int) * size);
   #ifdef GAZI 
   colShift = (int*)malloc(sizeof(int)*mSize);
+  for (int l = 0; l < mSize; ++l)
+  {
+	  colShift[l] = l;
+  }
   #endif 
   pProcInd[0] = 0;
   pProcNum[0] = mSize / size;
@@ -194,27 +199,32 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 
      // find max col from i in i-th row
     double MaxValue = -1;
-    double maxCol = -1;
+    int maxCol = -1;
     if( rank == leadingRowRank)
     {             
       for (int j = i; j < mSize; j++) 
       {
-          if (MaxValue < fabs(pProcRows[leadingRowPos * mSize + j]))) 
+          if (MaxValue < fabs(pProcRows[leadingRowPos * mSize + j])) 
           {
             MaxValue = fabs(pProcRows[leadingRowPos * mSize + j]);
              maxCol = j; 
           }
       }
       assert(MaxValue > 0); // matrix must be not singular
-       colShift[i] = maxCol;
+	  int temp = colShift[i];
+       colShift[i] = colShift[maxCol];
+	   colShift[maxCol] = temp;
     } 
     MPI_Bcast(colShift, mSize, MPI_INT, leadingRowRank,MPI_COMM_WORLD);
    
     if ( maxCol != i) //если перестановка  нужна
     {
+		double temp;
       for(int j = 0; j < pProcNum[rank]; ++j)
       {
-        pProcRows[j * mSize + i] ^= pProcRows[j * mSize + maxCol] ^= pProcRows[j * mSize + i] ^= pProcRows[j * mSize + maxCol]
+        temp = pProcRows[j * mSize + i];
+		pProcRows[j * mSize + i] = pProcRows[j * mSize + colShift[i]];
+		pProcRows[j * mSize + colShift[i]] = temp;
       }
     }
     
@@ -259,7 +269,11 @@ void BackSubstitution (double* pProcRows, double* pProcVector, double* pProcResu
     // вычисляем неизвестное
     if (rank == iterRank) 
     {
-      iterResult = pProcVector[IterLeadingRowPos] / pProcRows[IterLeadingRowPos * mSize + i];
+	  #ifdef GAZI
+	  iterResult = pProcVector[IterLeadingRowPos] / pProcRows[IterLeadingRowPos * mSize + colShift[i]];
+	  #else
+	  iterResult = pProcVector[IterLeadingRowPos] / pProcRows[IterLeadingRowPos * mSize + i];
+	  #endif
       pProcResult[IterLeadingRowPos] = iterResult;
     }
 
@@ -270,7 +284,11 @@ void BackSubstitution (double* pProcRows, double* pProcVector, double* pProcResu
     for (int j = 0; j < pProcNum[rank]; j++) 
       if (pProcNum[rank] + j > i) //sign changed
       {
+		#ifdef GAZI
+		val = pProcRows[j*mSize + colShift[i]] * iterResult;
+		#else
         val = pProcRows[j*mSize + i] * iterResult;
+		#endif
         pProcVector[j]=pProcVector[j] - val;
       }
   }
