@@ -111,14 +111,19 @@ void ColumnElimination(double* pProcRows, double* pProcVector, double* pBaseRow,
   }    
 }
 
-// Функция поиска расположения ведущей строки при обратном ходе
+/**
+ * Определяет процесс в котором находится строка и смещение по абсолютному номеру строки
+ * @param rowInd     Абсолютный номер строки
+ * @param mSize      Размерность матрицы
+ * @param iterRank   Номер процесса к которому принадлежит строка
+ * @param iterOffset смещение строки в процессе
+ */
 void RowIndToRankAndOffset(int rowInd, int mSize, int &iterRank, int &iterOffset) 
 {
   assert(rowInd < mSize);
   iterRank = -1;
   for (int i = 1; i < size; ++i) 
   {
-  // если строка находится в строках данного процесса 
     if (rowInd < pProcInd[i])
     {
       iterRank = i - 1;
@@ -129,13 +134,12 @@ void RowIndToRankAndOffset(int rowInd, int mSize, int &iterRank, int &iterOffset
     iterRank = size - 1;
 
   assert(iterRank >= 0);
-  // позиция строки в данном процессе
+  // смещение строки в данном процессе
   iterOffset = rowInd - pProcInd[iterRank];
 }
 
-// Прямой ход алгоритма Гаусса
 /**
- * [GaussianElimination description]
+ * Прямой ход алгоритма Гаусса
  * @param pProcRows   строки для каждого процесса
  * @param pProcVector вектор свободных коэфицентов для каждого процесса
  * @param mSize        размерность матрицы
@@ -143,106 +147,70 @@ void RowIndToRankAndOffset(int rowInd, int mSize, int &iterRank, int &iterOffset
 void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 {
   double* pBaseRow = (double*)malloc(sizeof(double) * (mSize + 1));
-  /*double MaxValue;   // здачение ведущего элемента на данном процессе
-  int    BaseRowPos;   // позиция ведущей строки в процессе
-
-  struct { double MaxValue; int rank; } ProcBaseRow, BaseRow;   // структура для ведущей строки
-
-  // хранит ведущую строку и элемент вектора правой части
-  
-*/
   for (int i = 0; i < mSize; i++)  
-  {
-  /* 
-    // вычисляем локальную ведущую строку
-    double MaxValue = 0;             
-
-    for (int j = 0; j < pProcNum[rank]; j++) 
-    {
-        if ((pProcBaseRowIter[j] == -1) && (MaxValue < fabs(pProcRows[j*mSize+i]))) 
-        {
-          MaxValue = fabs(pProcRows[j*mSize+i]);
-          BaseRowPos = j; 
-        }
-    }
-    ProcBaseRow.MaxValue = MaxValue;
-    ProcBaseRow.rank = rank;
-
-    // определяем максимальный среди полученных ведущих элементов процессов
-    MPI_Allreduce(&ProcBaseRow, &BaseRow, 1, MPI_DOUBLE_INT, MPI_MAXLOC, MPI_COMM_WORLD);
-    
-    if (rank == BaseRow.rank)
-    {
-      // запоминаем порядок выбора ведущих строк 
-      pProcBaseRowIter[BaseRowPos]= i; // номер итерации
-      pBaseRows[i]= pProcInd[rank] + BaseRowPos;
-    }
-
-    // выполняем широковещательную рассылку номера ведущей строки   
-    MPI_Bcast(&pBaseRows[i], 1, MPI_INT, BaseRow.rank, MPI_COMM_WORLD);*/ 
+  {  	
+    //Вычисляем ранг и смещение итой строки
+    int baseRowRank;
+    int baseRowPos;
+    RowIndToRankAndOffset(i, mSize, baseRowRank, baseRowPos);
 	
-    //Вычисляем ранг и смещение катой строки
-    int leadingRowRank;
-    int leadingRowPos;
-    RowIndToRankAndOffset(i, mSize, leadingRowRank, leadingRowPos);
-	
-    if (rank == leadingRowRank)
+    if (rank == baseRowRank)
     {
       // заполняем ведущую строку + записываем элемент вектора правой части
       for (int j = 0; j < mSize; ++j) 
       {
-        pBaseRow[j] = pProcRows[leadingRowPos * mSize + j];
+        pBaseRow[j] = pProcRows[baseRowPos * mSize + j];
       }
-      pBaseRow[mSize] = pProcVector[leadingRowPos];
+      pBaseRow[mSize] = pProcVector[baseRowPos];
     }
 	
-    // выполняем широковещательную рассылку ведущей строки и элемента вектора правой части
-    MPI_Bcast(pBaseRow, mSize + 1, MPI_DOUBLE, leadingRowRank, MPI_COMM_WORLD);
+    // передаем базовую строку
+    MPI_Bcast(pBaseRow, mSize + 1, MPI_DOUBLE, baseRowRank, MPI_COMM_WORLD);
 	
-    // выполняем вычитание строк- исключаем соответствующую неизвестную
-
-    ColumnElimination(pProcRows, pProcVector, pBaseRow, mSize, i);
-	
-    
+    ColumnElimination(pProcRows, pProcVector, pBaseRow, mSize, i);   
   }
   free(pBaseRow);
 }
 
-
-
-// Обратный ход алгоритма Гаусса
+/**
+ * Обратный ход алгоритма
+ * @param pProcRows   сткроки для каждого процесса
+ * @param pProcVector правая часть для каждого процесса
+ * @param pProcResult результат для каждого процесса
+ * @param mSize       размерность матрицы
+ */
 void BackSubstitution (double* pProcRows, double* pProcVector, double* pProcResult, int mSize) 
 {
-  int iterRank;    // ранг процесса, на котором находится текущая ведущая строка
-  int IterBaseRowPos;   // позиция ведущей строки в процессе
+  int iterRank;    // номер процесса, на котором находится текущая базовая строка
+  int iterBaseRowPos;   // смещение базовой строки в процессе
   double iterResult;   // значение элемента результирующего вектора, вычисленное на данной итерации
   double val;
 
   for (int i = mSize - 1; i >= 0; --i) 
   {
-    RowIndToRankAndOffset(i, mSize, iterRank, IterBaseRowPos);
+    RowIndToRankAndOffset(i, mSize, iterRank, iterBaseRowPos);
     
     // вычисляем неизвестное
     if (rank == iterRank) 
     {
-      iterResult = pProcVector[IterBaseRowPos] / pProcRows[IterBaseRowPos * mSize + i];
-      pProcResult[IterBaseRowPos] = iterResult;
+      iterResult = pProcVector[iterBaseRowPos] / pProcRows[iterBaseRowPos * mSize + i];
+      pProcResult[iterBaseRowPos] = iterResult;
     }
 
-    // рассылаем полученное значение элемента результирующего вектора
+    // рассылаем полученное значение результата
     MPI_Bcast(&iterResult, 1, MPI_DOUBLE, iterRank, MPI_COMM_WORLD);
 
     // обновляем значения результирующего вектора 
     for (int j = 0; j < pProcNum[rank]; j++) 
       if (pProcNum[rank] + j > i) //sign changed
       {
-        val = pProcRows[j*mSize + i] * iterResult;
-        pProcVector[j]=pProcVector[j] - val;
+        val = pProcRows[j * mSize + i] * iterResult;
+        pProcVector[j] = pProcVector[j] - val;
       }
   }
 }
 
-// Функция завершения вычислений - освобождение памяти
+// просто освобождение памяти
 void ProcessTermination (double* &pVector, double* &pResult, double* &pProcRows, double* &pProcVector, double* &pProcResult) 
 {
   if (!rank) 
@@ -253,8 +221,6 @@ void ProcessTermination (double* &pVector, double* &pResult, double* &pProcRows,
   free(pProcRows);
   free(pProcVector);
   free(pProcResult);
-  //free(pBaseRows);
-  //free(pProcBaseRowIter);
   free(pProcInd);
   free(pProcNum);
 }
@@ -289,10 +255,10 @@ int main(int argc, char* argv[])
     mSize = atoi(argv[1]);
   }
   MPI_Bcast(&mSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-  // выделение памяти и инициализация данных, распределение строк матрицы между процессами
+  
   ProcessInitialization(pVector, pResult, pProcRows, pProcVector, pProcResult, mSize);
   /**/
+  #ifndef NDEBUG
   // вывод в файл исходной матрицы, сгенерированной случайным образом
   for (int i=0; i<size; i++) 
   {
@@ -314,7 +280,7 @@ int main(int argc, char* argv[])
   }
   MPI_Barrier(MPI_COMM_WORLD);
   }
-  /**/
+  #endif
   // включаем таймер
   start = MPI_Wtime();
 
