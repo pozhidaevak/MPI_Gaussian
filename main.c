@@ -180,24 +180,12 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 
     // выполняем широковещательную рассылку номера ведущей строки   
     MPI_Bcast(&pLeadingRows[i], 1, MPI_INT, LeadingRow.rank, MPI_COMM_WORLD);*/ 
-	#define LOL mSize - 1
-    if(i == LOL)
-	{
-		START();
-	}
+	
     //Вычисляем ранг и смещение катой строки
     int leadingRowRank;
     int leadingRowPos;
     RowIndToRankAndOffset(i, mSize, leadingRowRank, leadingRowPos);
-	if(i == LOL)
-	{
-		END("RowInd");
-	}
-     
-	if(i == LOL)
-	{
-		START();
-	}
+	
     if (rank == leadingRowRank)
     {
       // заполняем ведущую строку + записываем элемент вектора правой части
@@ -207,27 +195,14 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
       }
       pLeadingRow[mSize] = pProcVector[leadingRowPos];
     }
-	if(i == LOL)
-	{
-		END("baseLine input");
-	}
-	if(i == LOL)
-	{
-		START();
-	}
+	
     // выполняем широковещательную рассылку ведущей строки и элемента вектора правой части
     MPI_Bcast(pLeadingRow, mSize + 1, MPI_DOUBLE, leadingRowRank, MPI_COMM_WORLD);
-	if(i == LOL)
-	{
-		END("baseLine Bcast");
-	}
+	
     // выполняем вычитание строк- исключаем соответствующую неизвестную
 
     ColumnElimination(pProcRows, pProcVector, pLeadingRow, mSize, i);
-	if(i == LOL)
-	{
-		END("columnElimintaion");
-	}
+	
     
   }
   free(pLeadingRow);
