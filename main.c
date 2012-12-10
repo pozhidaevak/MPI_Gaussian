@@ -99,6 +99,28 @@ void ColumnElimination(double* pProcRows, double* pProcVector, double* pLeadingR
   }    
 }
 
+// Функция поиска расположения ведущей строки при обратном ходе
+void RowIndToRankAndOffset(int rowInd, int mSize, int &iterRank, int &iterOffset) 
+{
+  assert(rowInd < mSize);
+  iterRank = -1;
+  for (int i = 1; i < size; ++i) 
+  {
+  // если строка находится в строках данного процесса 
+    if (rowInd < pProcInd[i])
+    {
+      iterRank = i - 1;
+      break;
+    }
+  }
+  if (rowInd >= pProcInd[size - 1])
+    iterRank = size - 1;
+
+  assert(iterRank >= 0);
+  // позиция строки в данном процессе
+  iterOffset = rowInd - pProcInd[iterRank];
+}
+
 // Прямой ход алгоритма Гаусса
 /**
  * [GaussianElimination description]
@@ -145,20 +167,13 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
     // выполняем широковещательную рассылку номера ведущей строки   
     MPI_Bcast(&pLeadingRows[i], 1, MPI_INT, LeadingRow.rank, MPI_COMM_WORLD);*/ 
     
-    //Вычисляем ранг катой строки
-    int leadingRowRank = size - 1;
-    for (int i = 1; i < size ; ++i)
+    //Вычисляем ранг и смещение катой строки
+    int leadingRowRank;
+    int leadingRowPos;
+    RowIndToRankAndOffset(k, mSize, leadingRowRank, leadingRowPos);
+     
+    if (rank == leadingRowRank)
     {
-      if( k < pProcInd[i]  )
-      {
-        leadingRowRank = i - 1;
-        break;
-      }
-    }
-      
-    if (rank == LeadingRowRank)
-    {
-      int leadingRowPos = k - pProcInd[ledingRowRank];
       // заполняем ведущую строку + записываем элемент вектора правой части
       for (int j = 0; j < mSize; ++j) 
       {
@@ -175,25 +190,7 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
   }
 }
 
-// Функция поиска расположения ведущей строки при обратном ходе
-void RowIndToRankAndOffset(int rowInd, int mSize, int &iterRank, int &iterOffset) 
-{
-  assert(rowInd < mSize);
-  for (int i = 0; i < size - 1; i++) 
-  {
-  // если строка находится в строках данного процесса 
-    if ((pProcInd[i] <= rowInd) && (rowInd < pProcInd[i + 1]))
-    {
-      iterRank = i;
-      break;
-    }
-  }
-  if (rowInd >= pProcInd[size - 1])
-    iterRank = size - 1;
 
-  // позиция строки в данном процессе
-  iterOffset = rowInd - pProcInd[iterRank];
-}
 
 // Обратный ход алгоритма Гаусса
 void BackSubstitution (double* pProcRows, double* pProcVector, double* pProcResult, int mSize) 
