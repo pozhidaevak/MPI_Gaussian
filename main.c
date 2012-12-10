@@ -11,8 +11,14 @@
 #ifndef NDEBUG
   #define LOG(msg, ...) printf(msg, ##__VA_ARGS__); \
   printf("\n")
+  double _start;
+ 
+  #define START() _start = MPI_Wtime();
+  #define END(msg) printf(msg); printf(" Time: %f\n", MPI_Wtime() - _start);
 #else
   #define LOG(msg, ...)
+  #define START()
+  #define END(msg)
 #endif
 
 FILE *f_size, *f_matrix, *f_vector, *f_res, *f_time;
@@ -51,7 +57,6 @@ void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRo
   }
 
   //инициализация массивов для каждого процесса
-  LOG("pProcNum[rank] = %i", pProcNum[rank]);
   pProcRows = (double*)malloc(sizeof(double) * pProcNum[rank] * mSize); //TODO may be double**?
   pProcVector = (double*)malloc(sizeof(double) * pProcNum[rank]);
   pProcResult = (double*)malloc(sizeof(double) * pProcNum[rank]);
@@ -61,16 +66,17 @@ void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRo
   
   //for (int i=0; i<pProcNum[rank]; i++)   
   //  pProcLeadingRowIter[i] = -1;
-
+srand(time(NULL)+ rank);
   if (!rank) 
   {
     pVector = (double*)malloc(sizeof(double) * mSize);
     pResult = (double*)malloc(sizeof(double) * mSize);
 
     //генерация вектора правых частей системы с помощью датчика случайных чисел
+	
     for (i = 0; i < mSize; i++)
       pVector[i] = MY_RND;
-	LOG("in init pVector[0] = %f", pVector[0]);
+	
   }
 
   // генерируем строки матрицы на каждом процессе
@@ -174,12 +180,24 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 
     // выполняем широковещательную рассылку номера ведущей строки   
     MPI_Bcast(&pLeadingRows[i], 1, MPI_INT, LeadingRow.rank, MPI_COMM_WORLD);*/ 
-    
+	#define LOL mSize - 1
+    if(i == LOL)
+	{
+		START();
+	}
     //Вычисляем ранг и смещение катой строки
     int leadingRowRank;
     int leadingRowPos;
     RowIndToRankAndOffset(i, mSize, leadingRowRank, leadingRowPos);
+	if(i == LOL)
+	{
+		END("RowInd");
+	}
      
+	if(i == LOL)
+	{
+		START();
+	}
     if (rank == leadingRowRank)
     {
       // заполняем ведущую строку + записываем элемент вектора правой части
@@ -189,12 +207,27 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
       }
       pLeadingRow[mSize] = pProcVector[leadingRowPos];
     }
-
+	if(i == LOL)
+	{
+		END("baseLine input");
+	}
+	if(i == LOL)
+	{
+		START();
+	}
     // выполняем широковещательную рассылку ведущей строки и элемента вектора правой части
     MPI_Bcast(pLeadingRow, mSize + 1, MPI_DOUBLE, leadingRowRank, MPI_COMM_WORLD);
-
+	if(i == LOL)
+	{
+		END("baseLine Bcast");
+	}
     // выполняем вычитание строк- исключаем соответствующую неизвестную
+
     ColumnElimination(pProcRows, pProcVector, pLeadingRow, mSize, i);
+	if(i == LOL)
+	{
+		END("columnElimintaion");
+	}
     
   }
   free(pLeadingRow);
@@ -266,13 +299,8 @@ int main(int argc, char* argv[])
   MPI_Init ( &argc, &argv );
   MPI_Comm_rank ( MPI_COMM_WORLD, &rank );
   MPI_Comm_size ( MPI_COMM_WORLD, &size );
+    
   
-  //#ifdef NOMPI
-  rank = 0;
-  //#endif
-  printf("rank0 = %i",rank);
-  LOG("rank0 = %i",rank);
-  srand(time(NULL));
 
   //получить размер матрицы из коммандной строки
   if(argc < 2)
@@ -287,9 +315,8 @@ int main(int argc, char* argv[])
   }
   MPI_Bcast(&mSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-  LOG("before init pVector = %x", pVector);// выделение памяти и инициализация данных, распределение строк матрицы между процессами
+  // выделение памяти и инициализация данных, распределение строк матрицы между процессами
   ProcessInitialization(pVector, pResult, pProcRows, pProcVector, pProcResult, mSize);
-  LOG("after init pVector = %x", pVector);
   /**/
   // вывод в файл исходной матрицы, сгенерированной случайным образом
   for (int i=0; i<size; i++) 
@@ -301,14 +328,12 @@ int main(int argc, char* argv[])
 
     for (int j=0; j<pProcNum[rank]; j++) 
     {    
-      for (int ll=0; ll<mSize; ll++){
+      for (int ll=0; ll<mSize; ll++)
+      {
         
-        printf("%7.4f ", pProcRows[j*mSize+ll]);
-	  
-      printf("\r\n");
         fprintf(f_matrix,"%7.4f ", pProcRows[j*mSize + ll]);
+      }
       fprintf(f_matrix,"\r\n");
-	  }
     }
     fclose(f_matrix);
   }
@@ -320,26 +345,27 @@ int main(int argc, char* argv[])
 
   // вычисление результирующего вектора по методу Гаусса с выбором главного элемента в столбце
   // прямой ход
-  LOG("before GaussianElimination");
+  LOG("Starting elimination time: %f",MPI_Wtime() - start);
   GaussianElimination (pProcRows, pProcVector, mSize);
-  LOG("after gaussian pVector = %x", pVector);
+ 
   // обратный ход
+
+  LOG("Starting substitution time: %f",MPI_Wtime() - start);
   BackSubstitution (pProcRows, pProcVector, pProcResult, mSize);
-  LOG("after backsubstitu pVector = %x", pVector);
-  LOG("before Gatherv");
+  LOG("Starting Gaterf %f",MPI_Wtime() - start);
   // объединяем полученные на каждом процессоре результаты 
   MPI_Gatherv(pProcResult, pProcNum[rank], MPI_DOUBLE, pResult, pProcNum, pProcInd, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-   LOG("after gatherv pVector = %x", pVector);
-  LOG("before finish");
+   
   // останавливаем таймер
   finish = MPI_Wtime();
   duration = finish-start;
-   LOG("after finish pVector = %x", pVector);
+ 
   
   // запись результатов в файлы
    
   if (!rank) 
   {
+	  /**/
   // вывод в файл исходного вектора
   f_vector = fopen("vector.txt", "w");
   for (int i=0; i<mSize; i++)
@@ -351,22 +377,18 @@ int main(int argc, char* argv[])
   for (int i=0; i<mSize; i++)
     fprintf(f_res,"%7.4f ", pResult[i]);
   fclose(f_res);
-  
+  /**/
   // вывод значения времени, затраченного на вычисления
   f_time = fopen("time.txt", "a+");
     fprintf(f_time, " Number of processors: %d\n size of Matrix: %d\n Time of execution: %f\n\n", size, mSize, duration);
+	printf(" Number of processors: %d\n size of Matrix: %d\n Time of execution: %f\n\n", size, mSize, duration);
     fclose(f_time);
   
-    printf ("\n Result Vector: \n");
-    for (int i=0; i<mSize; i++)
-      printf("%7.4f ", pResult[i]);
-    printf("\n Time of execution: %f\n", duration);
-    scanf("%d", &mSize);
+   
   
   }
   
   ProcessTermination(pVector, pResult, pProcRows, pProcVector, pProcResult);
-  LOG("before finalize");
   MPI_Finalize();
   return 0;
 }
