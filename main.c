@@ -3,6 +3,7 @@
 #include <time.h>
 #include <math.h>
 #include <mpi.h>
+#include <assert.h>
 
 #define MY_RND (double)(rand() + 1) / RAND_MAX
 #ifndef NDEBUG
@@ -16,8 +17,8 @@ FILE *f_size, *f_matrix, *f_vector, *f_res, *f_time;
 int size;  // число доступных процессов
 int rank;  // ранг текущего процесса
 
-int* pLeadingRows; // массив для запоминания порядка выбора ведущих строк - глобальный 
-int* pProcLeadingRowIter; // массив с номерами итераций, на которых строки данного процесса выбирались в качестве ведущей - локальный для каждого процесса           
+//int* pLeadingRows; // массив для запоминания порядка выбора ведущих строк - глобальный 
+//int* pProcLeadingRowIter; // массив с номерами итераций, на которых строки данного процесса выбирались в качестве ведущей - локальный для каждого процесса           
 
 int* pProcInd; // массив номеров первой строки, расположенной на процессе
 int* pProcNum; // количество строк линейной системы, расположенных на процессе
@@ -34,7 +35,7 @@ void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRo
   pProcNum = (int*)malloc(sizeof(int) * size);  
   pProcInd[0] = 0;
   pProcNum[0] = mSize / size;
-  int remains = size - (mSize % size); \\ кол-во процессов с mSize / size строк, у остальных на одну больше
+  int remains = size - (mSize % size); // кол-во процессов с mSize / size строк, у остальных на одну больше
   for (i = 1; i < remains; ++i) 
   {
     pProcNum[i] = pProcNum[0];
@@ -59,8 +60,8 @@ void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRo
 
   if (!rank) 
   {
-    pVector = malloc(sizeof(double) * mSize);
-    pResult = malloc(sizeof(double) * mSize);
+    pVector = (double*)malloc(sizeof(double) * mSize);
+    pResult = (double*)malloc(sizeof(double) * mSize);
 
     //генерация вектора правых частей системы с помощью датчика случайных чисел
     for (i = 0; i < mSize; i++)
@@ -130,16 +131,18 @@ void RowIndToRankAndOffset(int rowInd, int mSize, int &iterRank, int &iterOffset
  */
 void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 {
+  double* pLeadingRow = (double*)malloc(sizeof(double) * (mSize + 1));
   /*double MaxValue;   // здачение ведущего элемента на данном процессе
   int    LeadingRowPos;   // позиция ведущей строки в процессе
 
   struct { double MaxValue; int rank; } ProcLeadingRow, LeadingRow;   // структура для ведущей строки
 
   // хранит ведущую строку и элемент вектора правой части
-  double* pLeadingRow = malloc(sizeof(double) * (mSize + 1));
-
+  
+*/
   for (int i = 0; i < mSize; i++)  
-  { 
+  {
+  /* 
     // вычисляем локальную ведущую строку
     double MaxValue = 0;             
 
@@ -170,23 +173,24 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
     //Вычисляем ранг и смещение катой строки
     int leadingRowRank;
     int leadingRowPos;
-    RowIndToRankAndOffset(k, mSize, leadingRowRank, leadingRowPos);
+    RowIndToRankAndOffset(i, mSize, leadingRowRank, leadingRowPos);
      
     if (rank == leadingRowRank)
     {
       // заполняем ведущую строку + записываем элемент вектора правой части
       for (int j = 0; j < mSize; ++j) 
       {
-        pLeadingRow[j] = pProcRows[leadingRowPos*mSize + j];
+        pLeadingRow[j] = pProcRows[leadingRowPos * mSize + j];
       }
       pLeadingRow[mSize] = pProcVector[leadingRowPos];
     }
 
     // выполняем широковещательную рассылку ведущей строки и элемента вектора правой части
-    MPI_Bcast(pLeadingRow, mSize + 1, MPI_DOUBLE, LeadingRow.rank, MPI_COMM_WORLD);
+    MPI_Bcast(pLeadingRow, mSize + 1, MPI_DOUBLE, leadingRowRank, MPI_COMM_WORLD);
 
     // выполняем вычитание строк- исключаем соответствующую неизвестную
     ColumnElimination(pProcRows, pProcVector, pLeadingRow, mSize, i);
+    free(pLeadingRow);
   }
 }
 
@@ -195,31 +199,30 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 // Обратный ход алгоритма Гаусса
 void BackSubstitution (double* pProcRows, double* pProcVector, double* pProcResult, int mSize) 
 {
-  int IterRank;    // ранг процесса, на котором находится текущая ведущая строка
+  int iterRank;    // ранг процесса, на котором находится текущая ведущая строка
   int IterLeadingRowPos;   // позиция ведущей строки в процессе
-  double IterResult;   // значение элемента результирующего вектора, вычисленное на данной итерации
+  double iterResult;   // значение элемента результирующего вектора, вычисленное на данной итерации
   double val;
 
-  for (int i = mSize-1; i >= 0; i--) 
+  for (int i = mSize - 1; i >= 0; --i) 
   {
-  // ищем ведущую строку - начинаем с конца массива
-  RowIndToRankAndOffset(pLeadingRows[i], mSize, IterRank, IterLeadingRowPos);
+    RowIndToRankAndOffset(i, mSize, iterRank, IterLeadingRowPos);
     
     // вычисляем неизвестное
-    if (rank == IterRank) 
-  {
-      IterResult = pProcVector[IterLeadingRowPos]/pProcRows[IterLeadingRowPos*mSize+i];
-    pProcResult[IterLeadingRowPos] = IterResult;
+    if (rank == iterRank) 
+    {
+      iterResult = pProcVector[IterLeadingRowPos] / pProcRows[IterLeadingRowPos * mSize + i];
+      pProcResult[IterLeadingRowPos] = iterResult;
     }
 
     // рассылаем полученное значение элемента результирующего вектора
-    MPI_Bcast(&IterResult, 1, MPI_DOUBLE, IterRank, MPI_COMM_WORLD);
+    MPI_Bcast(&iterResult, 1, MPI_DOUBLE, iterRank, MPI_COMM_WORLD);
 
     // обновляем значения результирующего вектора 
     for (int j = 0; j < pProcNum[rank]; j++) 
-      if (pProcLeadingRowIter[j] < i) 
-    {
-        val = pProcRows[j*mSize + i] * IterResult;
+      if (pProcNum[rank] + j < i) 
+      {
+        val = pProcRows[j*mSize + i] * iterResult;
         pProcVector[j]=pProcVector[j] - val;
       }
   }
@@ -238,8 +241,8 @@ void ProcessTermination (double* pVector, double* pResult, double* pProcRows, do
   free(pProcVector);
   free(pProcResult);
 
-  free(pLeadingRows);
-  free(pProcLeadingRowIter);
+  //free(pLeadingRows);
+  //free(pProcLeadingRowIter);
 
   free(pProcInd);
   free(pProcNum);
