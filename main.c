@@ -7,7 +7,6 @@
 
 #define MY_RND (double)(rand() + 1) / RAND_MAX
 //#define NDEBUG
-#define NOMPI
 #ifndef NDEBUG
   #define LOG(msg, ...) printf(msg, ##__VA_ARGS__); \
   printf("\n")
@@ -147,7 +146,7 @@ void RowIndToRankAndOffset(int rowInd, int mSize, int &iterRank, int &iterOffset
 void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 {
   double* pBaseRow = (double*)malloc(sizeof(double) * (mSize + 1));
-  for (int i = 0; i < mSize; i++)  
+  for (int i = 0; i < mSize; ++i)  
   {  	
     //Вычисляем ранг и смещение итой строки
     int baseRowRank;
@@ -215,8 +214,8 @@ void ProcessTermination (double* &pVector, double* &pResult, double* &pProcRows,
 {
   if (!rank) 
   {
-     free(pVector);
-     free(pResult);
+    free(pVector);
+    free(pResult);
   }
   free(pProcRows);
   free(pProcVector);
@@ -260,37 +259,38 @@ int main(int argc, char* argv[])
   /**/
   #ifndef NDEBUG
   // вывод в файл исходной матрицы, сгенерированной случайным образом
-  for (int i=0; i<size; i++) 
+  for (int i=0; i<size; ++i) 
   {
-  if (rank == i) 
-  {
-    if (!rank) f_matrix = fopen("matrix.txt", "w");
-        else f_matrix = fopen("matrix.txt", "a+");
-
-    for (int j=0; j<pProcNum[rank]; j++) 
-    {    
-      for (int ll=0; ll<mSize; ll++)
-      {
-        
-        fprintf(f_matrix,"%7.4f ", pProcRows[j*mSize + ll]);
+    if (rank == i) 
+    {
+      if (!rank)
+      {  
+        f_matrix = fopen("matrix.txt", "w");
       }
-      fprintf(f_matrix,"\r\n");
+      else
+      { 
+        f_matrix = fopen("matrix.txt", "a+");
+      }
+
+      for (int j=0; j<pProcNum[rank]; j++) 
+      {    
+        for (int ll=0; ll<mSize; ll++)
+        {
+          fprintf(f_matrix,"%f ", pProcRows[j*mSize + ll]);
+        }
+        fprintf(f_matrix,"\r\n");
+      }
+      fclose(f_matrix);
     }
-    fclose(f_matrix);
-  }
-  MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Barrier(MPI_COMM_WORLD);
   }
   #endif
   // включаем таймер
   start = MPI_Wtime();
 
-  // вычисление результирующего вектора по методу Гаусса с выбором главного элемента в столбце
-  // прямой ход
   LOG("Starting elimination time: %f",MPI_Wtime() - start);
   GaussianElimination (pProcRows, pProcVector, mSize);
  
-  // обратный ход
-
   LOG("Starting substitution time: %f",MPI_Wtime() - start);
   BackSubstitution (pProcRows, pProcVector, pProcResult, mSize);
   LOG("Starting Gaterf %f",MPI_Wtime() - start);
@@ -301,32 +301,31 @@ int main(int argc, char* argv[])
   finish = MPI_Wtime();
   duration = finish-start;
  
-  
   // запись результатов в файлы
-   
   if (!rank) 
   {
-	  /**/
-  // вывод в файл исходного вектора
-  f_vector = fopen("vector.txt", "w");
-  for (int i=0; i<mSize; i++)
-    fprintf(f_vector,"%7.4f ", pVector[i]);
-  fclose(f_vector);
+    #ifndef NDEBUG
+    // вывод в файл исходного вектора
+    f_vector = fopen("vector.txt", "w");
+    for (int i = 0; i < mSize; ++i)
+    {
+      fprintf(f_vector,"%f ", pVector[i]);
+    }
+    fclose(f_vector);
 
-  // вывод результата
-  f_res = fopen("result.txt", "w");
-  for (int i=0; i<mSize; i++)
-    fprintf(f_res,"%7.4f ", pResult[i]);
-  fclose(f_res);
-  /**/
-  // вывод значения времени, затраченного на вычисления
-  f_time = fopen("time.txt", "a+");
+    // вывод результата
+    f_res = fopen("result.txt", "w");
+    for (int i = 0; i < mSize; ++i)
+    {
+      fprintf(f_res,"%f ", pResult[i]);
+    }
+    fclose(f_res);
+    #endif
+    // вывод значения времени, затраченного на вычисления
+    f_time = fopen("time.txt", "a+");
     fprintf(f_time, " Number of processors: %d\n size of Matrix: %d\n Time of execution: %f\n\n", size, mSize, duration);
-	printf(" Number of processors: %d\n size of Matrix: %d\n Time of execution: %f\n\n", size, mSize, duration);
+  	printf(" Number of processors: %d\n size of Matrix: %d\n Time of execution: %f\n\n", size, mSize, duration);
     fclose(f_time);
-  
-   
-  
   }
   
   ProcessTermination(pVector, pResult, pProcRows, pProcVector, pProcResult);
