@@ -204,6 +204,7 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
     {             
       for (int j = i; j < mSize; j++) 
       {
+		  LOG("%f",pProcRows[leadingRowPos * mSize + j]);
           if (MaxValue < fabs(pProcRows[leadingRowPos * mSize + j])) 
           {
             MaxValue = fabs(pProcRows[leadingRowPos * mSize + j]);
@@ -217,7 +218,7 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
     } 
     MPI_Bcast(colShift, mSize, MPI_INT, leadingRowRank,MPI_COMM_WORLD);
    
-    if ( maxCol != i) //если перестановка  нужна
+    if ( colShift[i] != i) //если перестановка  нужна
     {
 		double temp;
       for(int j = 0; j < pProcNum[rank]; ++j)
@@ -227,7 +228,7 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
 		pProcRows[j * mSize + colShift[i]] = temp;
       }
     }
-    
+    MPI_Barrier(MPI_COMM_WORLD);
     #endif
 	
     if (rank == leadingRowRank)
