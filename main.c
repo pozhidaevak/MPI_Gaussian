@@ -40,7 +40,6 @@ int* pProcNum; // количество строк линейной систем�
 void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRows, 
               double* &pProcVector, double* &pProcResult, int mSize) 
 {       
-
   //рассчитьтать кол-во и начальную строку для каждого процесса 
   pProcInd = (int*)malloc(sizeof(int) * size);   
   pProcNum = (int*)malloc(sizeof(int) * size);  
