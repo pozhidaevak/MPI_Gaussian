@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
-#include <mpi.h>
+#include <pthread.h>
 #include <assert.h>
 
 #define MY_RND (double)(rand() + 1) / RAND_MAX
@@ -33,9 +33,7 @@ int* pProcNum; // количество строк линейной систем�
 //special C global vars
 double *pVector;
 double *pResult;
-double *pProcRows;
-double *pProcVector;
-double *pProcResult;
+double *Rows;
 
 /**
  * Инициализирует переменные, выделяет память, заполняет рандомом матрицу и вектор, вычисляет кол-во строк на каждый процессор
@@ -62,15 +60,13 @@ void ProcessInitialization (
   }
 
   //инициализация массивов для каждого процесса
-  pProcRows = (double*)malloc(sizeof(double) * pProcNum[rank] * mSize); 
-  pProcVector = (double*)malloc(sizeof(double) * pProcNum[rank]);
-  pProcResult = (double*)malloc(sizeof(double) * pProcNum[rank]);
+  Rows = (double*)malloc(sizeof(double) * pProcNum[rank] * mSize); 
+  
 
-  srand(time(NULL) + 2 * rank);rand(); //на это гребанную строку ушло пол дня, которые можно бы было провести полезнее и приятние -- например плевать в потолок
+  srand(time(NULL));rand(); //на это гребанную строку ушло пол дня, которые можно бы было провести полезнее и приятние -- например плевать в потолок
 
   //инициализация общих для всех процессов массивов
-  if (!rank) 
-  {
+ 
     pVector = (double*)malloc(sizeof(double) * mSize);
     pResult = (double*)malloc(sizeof(double) * mSize);
   #ifndef HARD_CODE
@@ -82,52 +78,26 @@ void ProcessInitialization (
   pVector[2] = 0.831599;
   #endif
 
-  }
+  
 
-  for (int i = 0; i < pProcNum[rank] * mSize; ++i)
-  {
    #ifndef HARD_CODE
-    pProcRows[i] = MY_RND;
+  for (int i = 0; i < mSize *mSize; ++i)
+    Rows[i] = MY_RND;
    #else
-  if (size == 3)
-  {
-    switch (rank)
-    {
-    case 0:
-      pProcRows[0] = 0.799280;
-      pProcRows[1] = 0.753441;
-      pProcRows[2] = 0.988647;
-      break;
-    case 1:
-      pProcRows[0] = 0.481552;
-      pProcRows[1] = 0.432295;
-      pProcRows[2] = 0.716788;
-      break;
-    case 2:
-      pProcRows[0] = 0.677297;
-      pProcRows[1] = 0.181341;
-      pProcRows[2] = 0.529557;
-      break;
-
-    }
-  }
-  else
-  {
-    pProcRows[0] = 0.799280;
-    pProcRows[1] = 0.753441;
-    pProcRows[2] = 0.988647;
-    pProcRows[3] = 0.481552;
-    pProcRows[4] = 0.432295;
-    pProcRows[5] = 0.716788;
-    pProcRows[6] = 0.677297;
-      pProcRows[7] = 0.181341;
-      pProcRows[8] = 0.529557;
-  }
+    Rows[0] = 0.799280;
+    Rows[1] = 0.753441;
+    Rows[2] = 0.988647;
+    Rows[3] = 0.481552;
+    Rows[4] = 0.432295;
+    Rows[5] = 0.716788;
+    Rows[6] = 0.677297;
+    Rows[7] = 0.181341;
+    Rows[8] = 0.529557;
   #endif
   }
 
   //разделяем pVector между всеми
-  MPI_Scatterv(pVector, pProcNum, pProcInd, MPI_DOUBLE, pProcVector, pProcNum[rank], MPI_DOUBLE, 0, MPI_COMM_WORLD);               
+  //MPI_Scatterv(pVector, pProcNum, pProcInd, MPI_DOUBLE, pProcVector, pProcNum[rank], MPI_DOUBLE, 0, MPI_COMM_WORLD);               
 }
 
 /**
