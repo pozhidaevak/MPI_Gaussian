@@ -1,0 +1,64 @@
+ Number of processors: 8
+ size of Matrix: 20000
+ Time of execution: 3254.956860
+
+ Number of processors: 4
+ size of Matrix: 20000
+ Time of execution: 3389.513391
+
+ Number of processors: 2
+ size of Matrix: 20000
+ Time of execution: 3225.722760
+
+ Number of processors: 1
+ size of Matrix: 20000
+ Time of execution: 3432.229091
+
+<O2>
+ Number of processors: 8
+ size of Matrix: 10000
+ Time of execution: 464.865473
+
+ Number of processors: 4
+ size of Matrix: 10000
+ Time of execution: 473.570780
+
+ Number of processors: 2
+ size of Matrix: 10000
+ Time of execution: 465.760236
+</O2>
+
+<no o>
+ Number of processors: 8
+ size of Matrix: 10000
+ Time of execution: 762.327430
+
+ Number of processors: 4
+ size of Matrix: 10000
+ Time of execution: 846.313850
+
+ Number of processors: 2
+ size of Matrix: 10000
+ Time of execution: 1296.566221
+
+ Number of processors: 1
+ size of Matrix: 10000
+ Time of execution: 1819.364144
+<no o>
+
+ Number of processors: 8
+ size of Matrix: 10000
+ Time of execution: 467.518209
+
+ Number of processors: 4
+ size of Matrix: 10000
+ Time of execution: 455.669440
+
+ Number of processors: 2
+ size of Matrix: 10000
+ Time of execution: 496.865137
+
+ Number of processors: 1
+ size of Matrix: 10000
+ Time of execution: 621.999406
+

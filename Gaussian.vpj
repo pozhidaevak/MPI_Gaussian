@@ -11,7 +11,7 @@
         DebugCallbackName="gdb"
         Version="1"
         OutputFile="%bdGaussian.exe"
-        CompilerConfigName="GCC64"
+        CompilerConfigName="GCC-4.6.2-mingw32"
         Defines="">
         <Menu>
             <Target
@@ -24,7 +24,7 @@
                 SaveOption="SaveCurrent"
                 RunFromDir="%rw">
                 <Exec
-                    CmdLine='D:\Portable\mingwx64\bin\x86_64-w64-mingw32-g++.exe -c %xup -v %defd -g %~other -o "%bd%n%oe" %i %f'
+                    CmdLine='g++ -c %xup -v %defd -g %~other -o "%bd%n%oe" %i %f'
                     OtherOptions="-O1 -std=c99"/>
             </Target>
             <Target
@@ -36,7 +36,7 @@
                 Deletable="0"
                 SaveOption="SaveCurrent"
                 RunFromDir="%rw">
-                <Exec CmdLine='D:\Portable\mingwx64\bin\x86_64-w64-mingw32-g++.exe %xup -v -g -o "%o" %objs'/>
+                <Exec CmdLine='g++ %xup -v -g -o "%o" %objs'/>
             </Target>
             <Target
                 Name="Build"
@@ -103,11 +103,9 @@
                 Value="Executable"/>
         </List>
         <Includes>
-            <Include Dir="C:/MPICH64/include"/>
         </Includes>
         <Libs PreObjects="0">
-            <Lib File="-LC:/MPICH64/lib"/>
-            <Lib File="C:/MPICH64/lib/libmpi.a"/>
+            <Lib File="-lpthread"/>
         </Libs>
     </Config>
     <Config
@@ -116,7 +114,7 @@
         DebugCallbackName="gdb"
         Version="1"
         OutputFile="%bdGaussian.exe"
-        CompilerConfigName="GCC64"
+        CompilerConfigName="GCC-4.6.2-mingw32"
         Defines="">
         <Menu>
             <Target
@@ -129,7 +127,7 @@
                 SaveOption="SaveCurrent"
                 RunFromDir="%rw">
                 <Exec
-                    CmdLine='D:\Portable\mingwx64\bin\x86_64-w64-mingw32-g++.exe -c %xup -v %defd %~other -o "%bd%n%oe" %i %f'
+                    CmdLine='g++ -c %xup -v %defd %~other -o "%bd%n%oe" %i %f'
                     OtherOptions="-O1 -std=c99"/>
             </Target>
             <Target
@@ -141,7 +139,7 @@
                 Deletable="0"
                 SaveOption="SaveCurrent"
                 RunFromDir="%rw">
-                <Exec CmdLine='D:\Portable\mingwx64\bin\x86_64-w64-mingw32-g++.exe %xup -v -o "%o" %objs'/>
+                <Exec CmdLine='g++ %xup -v -o "%o" %objs'/>
             </Target>
             <Target
                 Name="Build"
@@ -208,11 +206,9 @@
                 Value="Executable"/>
         </List>
         <Includes>
-            <Include Dir="C:/MPICH64/include"/>
         </Includes>
         <Libs PreObjects="0">
-            <Lib File="-LC:/MPICH64/lib"/>
-            <Lib File="C:/MPICH64/lib/libmpi.a"/>
+            <Lib File="-lpthread"/>
         </Libs>
     </Config>
     <Files>
