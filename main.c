@@ -7,7 +7,7 @@
 
 #define MY_RND (double)(rand() + 1) / RAND_MAX
 //#define NDEBUG
-#define HARD_CODE
+//#define HARD_CODE
 #ifndef NDEBUG
   #define LOG(msg, ...) printf(msg, ##__VA_ARGS__); \
   printf("\n")
