@@ -109,19 +109,34 @@ void ProcessInitialization (
  */
 void* ColumnElimination(void* blabla) 
 {
+  pthread_t self = pthread_self();
+  int selfId = 0;
+  
+  for (int i = 0; i< size;++i)
+  {
+  
+    if(pthread_equal(self,threadsId[i]))
+    {
+    
+    selfId = i;
+      break;
+    }
+  
+  }
+  
   double multiplier; 
 
   //по строкам
-  for (int i = 0; i < pProcNum[rank]; ++i) 
+  for (int i = pProcInd[selfId]; i < pProcNum[selfId] + pProcInd[selfId]; ++i) 
   {
-    if (Iter < pProcInd[rank] + i) // строка еще не была базовой
+    if (BaseRowInd < i) // строка еще не была базовой
     {
-      multiplier = pProcRows[i * mSize + Iter] / pBaseRow[Iter]; 
-      for (int j=Iter; j < mSize; ++j) 
+      multiplier = Rows[i * mSize + BaseRowInd] / Rows[BaseRowInd * mSize + BaseRowInd]; 
+      for (int j=BaseRowInd; j < mSize; ++j) 
       {
-        pProcRows[i * mSize + j] -= pBaseRow[j] * multiplier;
+        pProcRows[i * mSize + j] -= Rows[BaseRowInd * mSize + j] * multiplier;
       }
-      pProcVector[i] -= pBaseRow[mSize] * multiplier;
+      pVector[i] -= pVector[BaseRowInd] * multiplier;
     }
   }    
 }
