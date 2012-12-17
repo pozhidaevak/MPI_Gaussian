@@ -24,7 +24,8 @@
 FILE *f_size, *f_matrix, *f_vector, *f_res, *f_time;
 
 int size;  // число доступных процессов
-
+int BaseRowInd;
+pthread_t* threadsId;
 
 int* pProcInd; // массив номеров первой строки, расположенной на процессе
 int* pProcNum; // количество строк линейной системы, расположенных на процессе
@@ -41,7 +42,8 @@ double *Rows;
  */
 void ProcessInitialization (
               int mSize) 
-{       
+{ 
+  threadsId = (pthread_t*) malloc(sizeof(pthread_t) * size);      
   //рассчитьтать кол-во и начальную строку для каждого процесса 
   pProcInd = (int*)malloc(sizeof(int) * size);   
   pProcNum = (int*)malloc(sizeof(int) * size);  
@@ -105,7 +107,7 @@ void ProcessInitialization (
  * @param mSize       размерность матрицы
  * @param Iter        номер базовой строки\итерации
  */
-void ColumnElimination(double* pBaseRow, int mSize, int Iter) 
+void* ColumnElimination(void* blabla) 
 {
   double multiplier; 
 
@@ -159,29 +161,23 @@ void RowIndToRankAndOffset(int rowInd, int mSize, int* iterRank, int *iterOffset
  */
 void GaussianElimination (int mSize)
 {
-  double* pBaseRow = (double*)malloc(sizeof(double) * (mSize + 1));
   for (int i = 0; i < mSize; ++i)  
-  {    
-    //Вычисляем ранг и смещение итой строки
-    int baseRowRank;
-    int baseRowPos;
-    RowIndToRankAndOffset(i, mSize, &baseRowRank, &baseRowPos);
-    if (rank == baseRowRank)
+  {
+    BaseRowInd = i;    
+    //создаем нити
+    for (int j = 0; j < size; ++j)
     {
-      // заполняем ведущую строку + записываем элемент вектора правой части
-      for (int j = 0; j < mSize; ++j) 
-      {
-        pBaseRow[j] = pProcRows[baseRowPos * mSize + j];
-      }
-      pBaseRow[mSize] = pProcVector[baseRowPos];
+      pthread_create(&threadsId[j], NULL, &ColumnElimination,NULL);
     }
-    // передаем базовую строку
-    MPI_Bcast(pBaseRow, mSize + 1, MPI_DOUBLE, baseRowRank, MPI_COMM_WORLD);
- 
-    ColumnElimination(pBaseRow, mSize, i); 
-  //MPI_Barrier(MPI_COMM_WORLD);  
+    //ждем завершения
+    for (int j = 0; j < size; ++j)
+    {
+      if(pthread_join(threadsId[j],NULL))
+      {
+        printf("join fails\n");fflush(stdout);
+      }
+    }  
   }
-  free(pBaseRow);
 }
 
 /**
@@ -230,6 +226,7 @@ void ProcessTermination ()
   free(pProcRows);
   free(pProcInd);
   free(pProcNum);
+  free(threadsId);
 }
 
 int main(int argc, char* argv[]) 
