@@ -25,6 +25,7 @@ FILE *f_size, *f_matrix, *f_vector, *f_res, *f_time;
 
 int size;  // число доступных процессов
 int BaseRowInd;
+double iterResult;   // значение элемента результирующего вектора, вычисленное на данной итерации
 pthread_t* threadsId;
 
 int* pProcInd; // массив номеров первой строки, расположенной на процессе
@@ -141,32 +142,6 @@ void* ColumnElimination(void* blabla)
   }    
 }
 
-/**
- * Определяет процесс в котором находится строка и смещение по абсолютному номеру строки
- * @param rowInd     Абсолютный номер строки
- * @param mSize      Размерность матрицы
- * @param iterRank   Номер процесса к которому принадлежит строка
- * @param iterOffset смещение строки в процессе
- */
-void RowIndToRankAndOffset(int rowInd, int mSize, int* iterRank, int *iterOffset) 
-{
-  assert(rowInd < mSize);
- *iterRank = -1;
-  for (int i = 1; i < size; ++i) 
-  {
-    if (rowInd < pProcInd[i])
-    {
-      *iterRank = i - 1;
-      break;
-    }
-  }
-  if (rowInd >= pProcInd[size - 1])
-    *iterRank = size - 1;
-
-  assert(*iterRank >= 0);
-  // смещение строки в данном процессе
-  *iterOffset = rowInd - pProcInd[*iterRank];
-}
 
 /**
  * Прямой ход алгоритма Гаусса
@@ -195,6 +170,34 @@ void GaussianElimination (int mSize)
   }
 }
 
+void* BackThread(void * blabla)
+{
+   pthread_t self = pthread_self();
+  int selfId = 0;
+  
+  for (int i = 0; i< size;++i)
+  {
+  
+    if(pthread_equal(self,threadsId[i]))
+    { 
+    selfId = i;
+      break;
+    }
+  
+  }
+  // обновляем значения результирующего вектора
+  double val;
+  for (int j = pProcInd[selfId]; j < pProcNum[selfId] + pProcInd[selfId]; j++) 
+  {
+    if (j < BaseRowInd) //sign changed
+    {
+      val = Rows[j * mSize + BaseRowInd] * iterResult;
+      pVector[j] = pVector[j] - val;
+    }
+  }
+
+}
+
 /**
  * Обратный ход алгоритма
  * @param pProcRows   сткроки для каждого процесса
@@ -204,32 +207,27 @@ void GaussianElimination (int mSize)
  */
 void BackSubstitution (int mSize) 
 {
-  int iterRank;    // номер процесса, на котором находится текущая базовая строка
-  int iterBaseRowPos;   // смещение базовой строки в процессе
-  double iterResult;   // значение элемента результирующего вектора, вычисленное на данной итерации
-  double val;
-
   for (int i = mSize - 1; i >= 0; --i) 
   {
-    RowIndToRankAndOffset(i, mSize, &iterRank, &iterBaseRowPos);
     
     // вычисляем неизвестное
-    if (rank == iterRank) 
+      iterResult = pVector[i] / Rows[i * mSize + i];
+      pResult[i] = iterResult;
+
+      BaseRowInd = i;
+     for (int j = 0; j < size; ++j)
     {
-      iterResult = pProcVector[iterBaseRowPos] / pProcRows[iterBaseRowPos * mSize + i];
-      pProcResult[iterBaseRowPos] = iterResult;
+      pthread_create(&threadsId[j], NULL, &BackThread,NULL);
     }
-
-    // рассылаем полученное значение результата
-    MPI_Bcast(&iterResult, 1, MPI_DOUBLE, iterRank, MPI_COMM_WORLD);
-
-    // обновляем значения результирующего вектора 
-    for (int j = 0; j < pProcNum[rank]; j++) 
-      if (pProcInd[rank] + j < i) //sign changed
+    //ждем завершения
+    for (int j = 0; j < size; ++j)
+    {
+      if(pthread_join(threadsId[j],NULL))
       {
-        val = pProcRows[j * mSize + i] * iterResult;
-        pProcVector[j] = pProcVector[j] - val;
+        printf("join fails\n");fflush(stdout);
       }
+    }   
+   
   }
 }
 
