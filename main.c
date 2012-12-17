@@ -179,7 +179,7 @@ void* BackThread(void * blabla)
   for (int i = 0; i< size;++i)
   {
   
-    if(pthread_equal(self,threadsId2[i]))
+    if(pthread_equal(self,threadsId[i]))
     { 
     selfId = i;
       break;
