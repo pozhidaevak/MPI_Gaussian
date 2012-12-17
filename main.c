@@ -24,7 +24,7 @@
 FILE *f_size, *f_matrix, *f_vector, *f_res, *f_time;
 
 int size;  // число доступных процессов
-int rank;  // ранг текущего процесса
+
 
 int* pProcInd; // массив номеров первой строки, расположенной на процессе
 int* pProcNum; // количество строк линейной системы, расположенных на процессе
@@ -77,9 +77,6 @@ void ProcessInitialization (
   pVector[1] = 0.329722;
   pVector[2] = 0.831599;
   #endif
-
-  
-
    #ifndef HARD_CODE
   for (int i = 0; i < mSize *mSize; ++i)
     Rows[i] = MY_RND;
@@ -228,14 +225,9 @@ void BackSubstitution (int mSize)
 // просто освобождение памяти
 void ProcessTermination ()
 {
-  if (!rank) 
-  {
-    free(pVector);
-    free(pResult);
-  }
+  free(pVector);
+  free(pResult);
   free(pProcRows);
-  free(pProcVector);
-  free(pProcResult);
   free(pProcInd);
   free(pProcNum);
 }
@@ -244,56 +236,35 @@ int main(int argc, char* argv[])
 {
   int    mSize;     // размер матрицы
   double  start, finish, duration; // для подсчета времени вычислений
-
-  MPI_Init ( &argc, &argv );
-  MPI_Comm_rank ( MPI_COMM_WORLD, &rank );
-  MPI_Comm_size ( MPI_COMM_WORLD, &size );
-    
+   
   //получить размер матрицы из коммандной строки
-  if(argc < 2)
+  if(argc < 3)
   {
-    printf("No size parameter");
-    MPI_Finalize();
+    printf("No size or mSize parameter");
     return 0;
-  }
-  if(!rank)
-  {
-    mSize = atoi(argv[1]);
-  }
-  MPI_Bcast(&mSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  } 
+  mSize = atoi(argv[1]);
+  size = atoi(argv[2]);
   
   ProcessInitialization(mSize);
   /**/
   #ifndef NDEBUG
-  // вывод в файл исходной матрицы, сгенерированной случайным образом
-  for (int i=0; i<size; ++i) 
-  {
-    if (rank == i) 
+  // вывод в файл исходной матрицы, сгенерированной случайным образом  
+  f_matrix = fopen("matrix.txt", "w");
+    
+  for (int j=0; j < mSize; j++) 
+  {    
+    for (int ll=0; ll < mSize; ll++)
     {
-      if (!rank)
-      {  
-        f_matrix = fopen("matrix.txt", "w");
-      }
-      else
-      { 
-        f_matrix = fopen("matrix.txt", "a+");
-      }
-
-      for (int j=0; j<pProcNum[rank]; j++) 
-      {    
-        for (int ll=0; ll<mSize; ll++)
-        {
-          fprintf(f_matrix,"%f ", pProcRows[j*mSize + ll]);
-        }
-        fprintf(f_matrix,"\r\n");
-      }
-      fclose(f_matrix);
+      fprintf(f_matrix,"%f ", pProcRows[j * mSize + ll]);
     }
-    MPI_Barrier(MPI_COMM_WORLD);
+    fprintf(f_matrix,"\r\n");
   }
+  fclose(f_matrix);
+   
   #endif
   // включаем таймер
-  start = MPI_Wtime();
+  start = (double)clock()/CLOCKS_PER_SECOND;
 
   //MPI_Barrier(MPI_COMM_WORLD); 
   GaussianElimination (mSize);
@@ -307,17 +278,12 @@ int main(int argc, char* argv[])
   #endif
    
   BackSubstitution (mSize);
-  MPI_Barrier(MPI_COMM_WORLD);
-  // объединяем полученные на каждом процессоре результаты 
-  MPI_Gatherv(pProcResult, pProcNum[rank], MPI_DOUBLE, pResult, pProcNum, pProcInd, MPI_DOUBLE, 0, MPI_COMM_WORLD);
    
   // останавливаем таймер
-  finish = MPI_Wtime();
+  finish = (double)clock()/CLOCKS_PER_SECOND
   duration = finish-start;
  
   // запись результатов в файлы
-  if (!rank) 
-  {
     #ifndef NDEBUG
     // вывод в файл исходного вектора
     f_vector = fopen("vector.txt", "w");
@@ -340,9 +306,8 @@ int main(int argc, char* argv[])
     fprintf(f_time, " Number of processors: %d\n size of Matrix: %d\n Time of execution: %f\n\n", size, mSize, duration);
     printf(" Number of processors: %d\n size of Matrix: %d\n Time of execution: %f\n\n", size, mSize, duration);
     fclose(f_time);
-  }
+  
   
   ProcessTermination();
-  MPI_Finalize();
   return 0;
 }
