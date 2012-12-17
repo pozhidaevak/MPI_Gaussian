@@ -6,7 +6,8 @@
 #include <assert.h>
 
 #define MY_RND (double)(rand() + 1) / RAND_MAX
-#define NDEBUG
+//#define NDEBUG
+#define HARD_CODE
 #ifndef NDEBUG
   #define LOG(msg, ...) printf(msg, ##__VA_ARGS__); \
   printf("\n")
@@ -70,20 +71,64 @@ void ProcessInitialization (
   pProcVector = (double*)malloc(sizeof(double) * pProcNum[rank]);
   pProcResult = (double*)malloc(sizeof(double) * pProcNum[rank]);
 
-  srand(time(NULL) + rank); //на это гребанную строку ушло пол дня, которые можно бы было провести полезнее и приятние -- например плевать в потолок
+  srand(time(NULL) + 2 * rank);rand(); //на это гребанную строку ушло пол дня, которые можно бы было провести полезнее и приятние -- например плевать в потолок
 
   //инициализация общих для всех процессов массивов
   if (!rank) 
   {
     pVector = (double*)malloc(sizeof(double) * mSize);
     pResult = (double*)malloc(sizeof(double) * mSize);
+	#ifndef HARD_CODE
     for (int i = 0; i < mSize; ++i)
       pVector[i] = MY_RND;
+	#else
+	pVector[0] = 0.393170;
+	pVector[1] = 0.329722;
+	pVector[2] = 0.831599;
+	#endif
+
   }
 
   for (int i = 0; i < pProcNum[rank] * mSize; ++i)
-  {  
+  {
+	#ifndef HARD_CODE
     pProcRows[i] = MY_RND;
+	#else
+	if (size == 3)
+	{
+		switch (rank)
+		{
+		case 0:
+			pProcRows[0] = 0.799280;
+			pProcRows[1] = 0.753441;
+			pProcRows[2] = 0.988647;
+			break;
+		case 1:
+			pProcRows[0] = 0.481552;
+			pProcRows[1] = 0.432295;
+			pProcRows[2] = 0.716788;
+			break;
+		case 2:
+			pProcRows[0] = 0.677297;
+			pProcRows[1] = 0.181341;
+			pProcRows[2] = 0.529557;
+			break;
+
+		}
+	}
+	else
+	{
+		pProcRows[0] = 0.799280;
+		pProcRows[1] = 0.753441;
+		pProcRows[2] = 0.988647;
+		pProcRows[3] = 0.481552;
+		pProcRows[4] = 0.432295;
+		pProcRows[5] = 0.716788;
+		pProcRows[6] = 0.677297;
+			pProcRows[7] = 0.181341;
+			pProcRows[8] = 0.529557;
+	}
+	#endif
   }
 
   //разделяем pVector между всеми
@@ -142,6 +187,7 @@ void RowIndToRankAndOffset(int rowInd, int mSize, int* iterRank, int *iterOffset
   assert(*iterRank >= 0);
   // смещение строки в данном процессе
   *iterOffset = rowInd - pProcInd[*iterRank];
+  //LOG("Offset calc: i = %d; rank = %d; offset = %d",rowInd, *iterRank, *iterOffset);
 }
 
 /**
@@ -159,21 +205,28 @@ void GaussianElimination (int mSize)
     int baseRowRank;
     int baseRowPos;
     RowIndToRankAndOffset(i, mSize, &baseRowRank, &baseRowPos);
-	
+	//MPI_Barrier(MPI_COMM_WORLD);
     if (rank == baseRowRank)
     {
+	//LOG("Base rowRank %d; offset %d", rank, baseRowPos);
       // заполняем ведущую строку + записываем элемент вектора правой части
       for (int j = 0; j < mSize; ++j) 
       {
         pBaseRow[j] = pProcRows[baseRowPos * mSize + j];
       }
       pBaseRow[mSize] = pProcVector[baseRowPos];
+	  //LOG(" BaseRow 0: %f BaseRow mSize: %f rank:%d pos:%d", pBaseRow[0], pBaseRow[mSize], rank, baseRowPos);
     }
-	
+	//MPI_Barrier(MPI_COMM_WORLD);
     // передаем базовую строку
     MPI_Bcast(pBaseRow, mSize + 1, MPI_DOUBLE, baseRowRank, MPI_COMM_WORLD);
-	
-    ColumnElimination(pBaseRow, mSize, i);   
+	if (!rank)
+	{
+		//LOG("BaseRow 0: %f BaseRow mSize: %f", pBaseRow[0], pBaseRow[mSize]);
+	}
+	//MPI_Barrier(MPI_COMM_WORLD);
+    ColumnElimination(pBaseRow, mSize, i); 
+	MPI_Barrier(MPI_COMM_WORLD);  
   }
   free(pBaseRow);
 }
@@ -208,7 +261,7 @@ void BackSubstitution (int mSize)
 
     // обновляем значения результирующего вектора 
     for (int j = 0; j < pProcNum[rank]; j++) 
-      if (pProcNum[rank] + j > i) //sign changed
+      if (pProcInd[rank] + j < i) //sign changed
       {
         val = pProcRows[j * mSize + i] * iterResult;
         pProcVector[j] = pProcVector[j] - val;
@@ -290,12 +343,21 @@ int main(int argc, char* argv[])
   // включаем таймер
   start = MPI_Wtime();
 
-  LOG("Starting elimination time: %f",MPI_Wtime() - start);
+  MPI_Barrier(MPI_COMM_WORLD); 
   GaussianElimination (mSize);
+  MPI_Barrier(MPI_COMM_WORLD);
+  
+  #ifdef HARD_CODE
+  for(int i = 0; i < mSize * pProcNum[rank]; ++i)
+  {
+	  LOG("%f", pProcRows[i]);
+  }
+	#endif
+   
  
-  LOG("Starting substitution time: %f",MPI_Wtime() - start);
   BackSubstitution (mSize);
-  LOG("Starting Gaterf %f",MPI_Wtime() - start);
+  MPI_Barrier(MPI_COMM_WORLD);
+  
   // объединяем полученные на каждом процессоре результаты 
   MPI_Gatherv(pProcResult, pProcNum[rank], MPI_DOUBLE, pResult, pProcNum, pProcInd, MPI_DOUBLE, 0, MPI_COMM_WORLD);
    
