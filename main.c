@@ -6,7 +6,7 @@
 #include <assert.h>
 
 #define MY_RND (double)(rand() + 1) / RAND_MAX
-//#define NDEBUG
+#define NDEBUG
 #ifndef NDEBUG
   #define LOG(msg, ...) printf(msg, ##__VA_ARGS__); \
   printf("\n")
@@ -28,6 +28,14 @@ int rank;  // ранг текущего процесса
 int* pProcInd; // массив номеров первой строки, расположенной на процессе
 int* pProcNum; // количество строк линейной системы, расположенных на процессе
 
+
+//special C global vars
+double *pVector;
+double *pResult;
+double *pProcRows;
+double *pProcVector;
+double *pProcResult;
+
 /**
  * Инициализирует переменные, выделяет память, заполняет рандомом матрицу и вектор, вычисляет кол-во строк на каждый процессор
  * @param pVector     вектор(правая часть)
@@ -37,8 +45,8 @@ int* pProcNum; // количество строк линейной систем�
  * @param pProcResult часть результата для каждого процесса
  * @param mSize       размерность матрицы
  */
-void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRows, 
-              double* &pProcVector, double* &pProcResult, int mSize) 
+void ProcessInitialization (
+              int mSize) 
 {       
   //рассчитьтать кол-во и начальную строку для каждого процесса 
   pProcInd = (int*)malloc(sizeof(int) * size);   
@@ -90,7 +98,7 @@ void ProcessInitialization (double* &pVector, double* &pResult, double* &pProcRo
  * @param mSize       размерность матрицы
  * @param Iter        номер базовой строки\итерации
  */
-void ColumnElimination(double* pProcRows, double* pProcVector, double* pBaseRow, int mSize, int Iter) 
+void ColumnElimination(double* pBaseRow, int mSize, int Iter) 
 {
   double multiplier; 
 
@@ -116,24 +124,24 @@ void ColumnElimination(double* pProcRows, double* pProcVector, double* pBaseRow,
  * @param iterRank   Номер процесса к которому принадлежит строка
  * @param iterOffset смещение строки в процессе
  */
-void RowIndToRankAndOffset(int rowInd, int mSize, int &iterRank, int &iterOffset) 
+void RowIndToRankAndOffset(int rowInd, int mSize, int* iterRank, int *iterOffset) 
 {
   assert(rowInd < mSize);
-  iterRank = -1;
+ *iterRank = -1;
   for (int i = 1; i < size; ++i) 
   {
     if (rowInd < pProcInd[i])
     {
-      iterRank = i - 1;
+      *iterRank = i - 1;
       break;
     }
   }
   if (rowInd >= pProcInd[size - 1])
-    iterRank = size - 1;
+    *iterRank = size - 1;
 
-  assert(iterRank >= 0);
+  assert(*iterRank >= 0);
   // смещение строки в данном процессе
-  iterOffset = rowInd - pProcInd[iterRank];
+  *iterOffset = rowInd - pProcInd[*iterRank];
 }
 
 /**
@@ -142,7 +150,7 @@ void RowIndToRankAndOffset(int rowInd, int mSize, int &iterRank, int &iterOffset
  * @param pProcVector вектор свободных коэфицентов для каждого процесса
  * @param mSize        размерность матрицы
  */
-void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
+void GaussianElimination (int mSize)
 {
   double* pBaseRow = (double*)malloc(sizeof(double) * (mSize + 1));
   for (int i = 0; i < mSize; ++i)  
@@ -150,7 +158,7 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
     //Вычисляем ранг и смещение итой строки
     int baseRowRank;
     int baseRowPos;
-    RowIndToRankAndOffset(i, mSize, baseRowRank, baseRowPos);
+    RowIndToRankAndOffset(i, mSize, &baseRowRank, &baseRowPos);
 	
     if (rank == baseRowRank)
     {
@@ -165,7 +173,7 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
     // передаем базовую строку
     MPI_Bcast(pBaseRow, mSize + 1, MPI_DOUBLE, baseRowRank, MPI_COMM_WORLD);
 	
-    ColumnElimination(pProcRows, pProcVector, pBaseRow, mSize, i);   
+    ColumnElimination(pBaseRow, mSize, i);   
   }
   free(pBaseRow);
 }
@@ -177,7 +185,7 @@ void GaussianElimination (double* pProcRows, double* pProcVector, int mSize)
  * @param pProcResult результат для каждого процесса
  * @param mSize       размерность матрицы
  */
-void BackSubstitution (double* pProcRows, double* pProcVector, double* pProcResult, int mSize) 
+void BackSubstitution (int mSize) 
 {
   int iterRank;    // номер процесса, на котором находится текущая базовая строка
   int iterBaseRowPos;   // смещение базовой строки в процессе
@@ -186,7 +194,7 @@ void BackSubstitution (double* pProcRows, double* pProcVector, double* pProcResu
 
   for (int i = mSize - 1; i >= 0; --i) 
   {
-    RowIndToRankAndOffset(i, mSize, iterRank, iterBaseRowPos);
+    RowIndToRankAndOffset(i, mSize, &iterRank, &iterBaseRowPos);
     
     // вычисляем неизвестное
     if (rank == iterRank) 
@@ -209,7 +217,7 @@ void BackSubstitution (double* pProcRows, double* pProcVector, double* pProcResu
 }
 
 // просто освобождение памяти
-void ProcessTermination (double* &pVector, double* &pResult, double* &pProcRows, double* &pProcVector, double* &pProcResult) 
+void ProcessTermination ()
 {
   if (!rank) 
   {
@@ -225,13 +233,8 @@ void ProcessTermination (double* &pVector, double* &pResult, double* &pProcRows,
 
 int main(int argc, char* argv[]) 
 {
-  double* pVector;  // вектор правых частей системы
-  double* pResult;  // результирующий вектор
   int    mSize;     // размер матрицы
   
-  double *pProcRows;      // строки матрицы на данном процессе
-  double *pProcVector;    // элементы вектора правых частей системы на данном процессе
-  double *pProcResult;    // элементы результирующего вектора на данном процессе
 
   double  start, finish, duration; // для подсчета времени вычислений
 
@@ -254,7 +257,7 @@ int main(int argc, char* argv[])
   }
   MPI_Bcast(&mSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
   
-  ProcessInitialization(pVector, pResult, pProcRows, pProcVector, pProcResult, mSize);
+  ProcessInitialization(mSize);
   /**/
   #ifndef NDEBUG
   // вывод в файл исходной матрицы, сгенерированной случайным образом
@@ -288,10 +291,10 @@ int main(int argc, char* argv[])
   start = MPI_Wtime();
 
   LOG("Starting elimination time: %f",MPI_Wtime() - start);
-  GaussianElimination (pProcRows, pProcVector, mSize);
+  GaussianElimination (mSize);
  
   LOG("Starting substitution time: %f",MPI_Wtime() - start);
-  BackSubstitution (pProcRows, pProcVector, pProcResult, mSize);
+  BackSubstitution (mSize);
   LOG("Starting Gaterf %f",MPI_Wtime() - start);
   // объединяем полученные на каждом процессоре результаты 
   MPI_Gatherv(pProcResult, pProcNum[rank], MPI_DOUBLE, pResult, pProcNum, pProcInd, MPI_DOUBLE, 0, MPI_COMM_WORLD);
@@ -327,7 +330,7 @@ int main(int argc, char* argv[])
     fclose(f_time);
   }
   
-  ProcessTermination(pVector, pResult, pProcRows, pProcVector, pProcResult);
+  ProcessTermination();
   MPI_Finalize();
   return 0;
 }
