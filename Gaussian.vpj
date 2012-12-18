@@ -24,7 +24,7 @@
                 SaveOption="SaveCurrent"
                 RunFromDir="%rw">
                 <Exec
-                    CmdLine='g++ -c %xup -v %defd -g %~other -o "%bd%n%oe" %i %f'
+                    CmdLine='g++ -c %xup -v -x c %defd -g %~other -o "%bd%n%oe" %i %f'
                     OtherOptions="-O1 -std=c99"/>
             </Target>
             <Target
@@ -127,7 +127,7 @@
                 SaveOption="SaveCurrent"
                 RunFromDir="%rw">
                 <Exec
-                    CmdLine='g++ -c %xup -v %defd %~other -o "%bd%n%oe" %i %f'
+                    CmdLine='g++ -c %xup -v -x c %defd %~other -o "%bd%n%oe" %i %f'
                     OtherOptions="-O1 -std=c99"/>
             </Target>
             <Target
