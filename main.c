@@ -5,6 +5,7 @@
 #include <mpi.h>
 #include <assert.h>
 
+#define GAZI
 #define MY_RND (double)(rand() + 1) / RAND_MAX
 //#define NDEBUG
 //#define HARD_CODE
@@ -25,6 +26,10 @@ FILE *f_size, *f_matrix, *f_vector, *f_res, *f_time;
 
 int size;  // число доступных процессов
 int rank;  // ранг текущего процесса
+#ifdef GAZI
+int* colShift; // array with order of column shifting
+#endif
+
 
 int* pProcInd; // массив номеров первой строки, расположенной на процессе
 int* pProcNum; // количество строк линейной системы, расположенных на процессе
@@ -43,10 +48,17 @@ double *pProcResult;
  */
 void ProcessInitialization (
               int mSize) 
-{       
+{
   //рассчитьтать кол-во и начальную строку для каждого процесса 
   pProcInd = (int*)malloc(sizeof(int) * size);   
   pProcNum = (int*)malloc(sizeof(int) * size);  
+  #ifdef GAZI 
+  colShift = (int*)malloc(sizeof(int)*mSize);
+  for (int l = 0; l < mSize; ++l)
+  {
+	  colShift[l] = l;
+  }
+  #endif 
   pProcInd[0] = 0;
   pProcNum[0] = mSize / size;
   int remains = size - (mSize % size); // кол-во процессов с mSize / size строк, у остальных на одну больше
@@ -67,7 +79,7 @@ void ProcessInitialization (
   pProcResult = (double*)malloc(sizeof(double) * pProcNum[rank]);
 
   srand(time(NULL) + 2 * rank);rand(); //на это гребанную строку ушло пол дня, которые можно бы было провести полезнее и приятние -- например плевать в потолок
-
+  
   //инициализация общих для всех процессов массивов
   if (!rank) 
   {
@@ -81,11 +93,11 @@ void ProcessInitialization (
   pVector[1] = 0.329722;
   pVector[2] = 0.831599;
   #endif
-
+	
   }
 
   for (int i = 0; i < pProcNum[rank] * mSize; ++i)
-  {
+  {  
    #ifndef HARD_CODE
     pProcRows[i] = MY_RND;
    #else
@@ -194,11 +206,46 @@ void GaussianElimination (int mSize)
 {
   double* pBaseRow = (double*)malloc(sizeof(double) * (mSize + 1));
   for (int i = 0; i < mSize; ++i)  
-  {    
+    {
     //Вычисляем ранг и смещение итой строки
     int baseRowRank;
     int baseRowPos;
     RowIndToRankAndOffset(i, mSize, &baseRowRank, &baseRowPos);
+    #ifdef GAZI
+	
+     // find max col from i in i-th row
+    double MaxValue = -1;
+    int maxCol = -1;
+    if( rank == baseRowRank)
+	{
+      for (int j = i; j < mSize; j++) 
+      {
+		  LOG("%f",pProcRows[baseRowPos * mSize + j]);
+          if (MaxValue < fabs(pProcRows[baseRowPos * mSize + j])) 
+          {
+            MaxValue = fabs(pProcRows[baseRowPos * mSize + j]);
+             maxCol = j; 
+          }
+	}
+      assert(MaxValue > 0); // matrix must be not singular
+	  int temp = colShift[i];
+       colShift[i] = colShift[maxCol];
+	   colShift[maxCol] = temp;
+    } 
+    MPI_Bcast(colShift, mSize, MPI_INT, baseRowRank,MPI_COMM_WORLD);
+     
+    if ( colShift[i] != i) //если перестановка  нужна
+	{
+		double temp;
+      for(int j = 0; j < pProcNum[rank]; ++j)
+      {
+        temp = pProcRows[j * mSize + i];
+		pProcRows[j * mSize + i] = pProcRows[j * mSize + colShift[i]];
+		pProcRows[j * mSize + colShift[i]] = temp;
+      }
+	}
+    MPI_Barrier(MPI_COMM_WORLD);
+    #endif
     if (rank == baseRowRank)
     {
       // заполняем ведущую строку + записываем элемент вектора правой части
@@ -207,13 +254,13 @@ void GaussianElimination (int mSize)
         pBaseRow[j] = pProcRows[baseRowPos * mSize + j];
       }
       pBaseRow[mSize] = pProcVector[baseRowPos];
-    }
+	}
     // передаем базовую строку
     MPI_Bcast(pBaseRow, mSize + 1, MPI_DOUBLE, baseRowRank, MPI_COMM_WORLD);
- 
+	
     ColumnElimination(pBaseRow, mSize, i); 
   //MPI_Barrier(MPI_COMM_WORLD);  
-  }
+	}
   free(pBaseRow);
 }
 
@@ -238,8 +285,12 @@ void BackSubstitution (int mSize)
     // вычисляем неизвестное
     if (rank == iterRank) 
     {
-      iterResult = pProcVector[iterBaseRowPos] / pProcRows[iterBaseRowPos * mSize + i];
-      pProcResult[iterBaseRowPos] = iterResult;
+	  #ifdef GAZI
+	 iterResult = pProcVector[iterBaseRowPos] / pProcRows[iterBaseRowPos * mSize + colShift[i]];
+	  #else
+	  iterResult = pProcVector[iterBaseRowPos] / pProcRows[iterBaseRowPos * mSize + i];
+	  #endif
+       pProcResult[iterBaseRowPos] = iterResult;
     }
 
     // рассылаем полученное значение результата
@@ -249,8 +300,12 @@ void BackSubstitution (int mSize)
     for (int j = 0; j < pProcNum[rank]; j++) 
       if (pProcInd[rank] + j < i) //sign changed
       {
-        val = pProcRows[j * mSize + i] * iterResult;
-        pProcVector[j] = pProcVector[j] - val;
+		#ifdef GAZI
+		val = pProcRows[j*mSize + colShift[i]] * iterResult;
+		#else
+        val = pProcRows[j*mSize + i] * iterResult;
+		#endif
+        pProcVector[j]=pProcVector[j] - val;
       }
   }
 }
@@ -260,14 +315,17 @@ void ProcessTermination ()
 {
   if (!rank) 
   {
-    free(pVector);
-    free(pResult);
+     free(pVector);
+     free(pResult);
   }
   free(pProcRows);
   free(pProcVector);
   free(pProcResult);
   free(pProcInd);
   free(pProcNum);
+  #ifdef GAZI
+  free(colShift);
+  #endif
 }
 
 int main(int argc, char* argv[]) 
@@ -291,15 +349,15 @@ int main(int argc, char* argv[])
     mSize = atoi(argv[1]);
   }
   MPI_Bcast(&mSize, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  
+
   ProcessInitialization(mSize);
   /**/
   #ifndef NDEBUG
   // вывод в файл исходной матрицы, сгенерированной случайным образом
   for (int i=0; i<size; ++i) 
   {
-    if (rank == i) 
-    {
+  if (rank == i) 
+  {
       if (!rank)
       {  
         f_matrix = fopen("matrix.txt", "w");
@@ -309,17 +367,17 @@ int main(int argc, char* argv[])
         f_matrix = fopen("matrix.txt", "a+");
       }
 
-      for (int j=0; j<pProcNum[rank]; j++) 
-      {    
-        for (int ll=0; ll<mSize; ll++)
-        {
+    for (int j=0; j<pProcNum[rank]; j++) 
+    {    
+      for (int ll=0; ll<mSize; ll++)
+      {
           fprintf(f_matrix,"%f ", pProcRows[j*mSize + ll]);
-        }
-        fprintf(f_matrix,"\r\n");
       }
-      fclose(f_matrix);
+      fprintf(f_matrix,"\r\n");
     }
-    MPI_Barrier(MPI_COMM_WORLD);
+    fclose(f_matrix);
+  }
+  MPI_Barrier(MPI_COMM_WORLD);
   }
   #endif
   // включаем таймер
@@ -328,14 +386,14 @@ int main(int argc, char* argv[])
   //MPI_Barrier(MPI_COMM_WORLD); 
   GaussianElimination (mSize);
   //MPI_Barrier(MPI_COMM_WORLD);
-  
+ 
   #ifdef HARD_CODE
   for(int i = 0; i < mSize * pProcNum[rank]; ++i)
   {
     LOG("%f", pProcRows[i]);
   }
   #endif
-   
+
   BackSubstitution (mSize);
   MPI_Barrier(MPI_COMM_WORLD);
   // объединяем полученные на каждом процессоре результаты 
@@ -349,26 +407,30 @@ int main(int argc, char* argv[])
   if (!rank) 
   {
     #ifndef NDEBUG
-    // вывод в файл исходного вектора
-    f_vector = fopen("vector.txt", "w");
+  // вывод в файл исходного вектора
+  f_vector = fopen("vector.txt", "w");
     for (int i = 0; i < mSize; ++i)
     {
       fprintf(f_vector,"%f ", pVector[i]);
     }
-    fclose(f_vector);
+  fclose(f_vector);
 
-    // вывод результата
-    f_res = fopen("result.txt", "w");
+  // вывод результата
+  f_res = fopen("result.txt", "w");
     for (int i = 0; i < mSize; ++i)
-    {
-      fprintf(f_res,"%f ", pResult[i]);
-    }
-    fclose(f_res);
+  {
+    #ifdef GAZI
+    fprintf(f_res,"%7.4f ", pResult[colShift[i]]);
+    #else
+    fprintf(f_res,"%7.4f ", pResult[i]);
     #endif
-    // вывод значения времени, затраченного на вычисления
-    f_time = fopen("time.txt", "a+");
+  }
+  fclose(f_res);
+    #endif
+  // вывод значения времени, затраченного на вычисления
+  f_time = fopen("time.txt", "a+");
     fprintf(f_time, " Number of processors: %d\n size of Matrix: %d\n Time of execution: %f\n\n", size, mSize, duration);
-    printf(" Number of processors: %d\n size of Matrix: %d\n Time of execution: %f\n\n", size, mSize, duration);
+	printf(" Number of processors: %d\n size of Matrix: %d\n Time of execution: %f\n\n", size, mSize, duration);
     fclose(f_time);
   }
   
