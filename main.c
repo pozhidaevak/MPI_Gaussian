@@ -28,6 +28,7 @@ int mSize;
 int BaseRowInd;
 double iterResult;   // значение элемента результирующего вектора, вычисленное на данной итерации
 pthread_t* threadsId;
+pthread_barrier_t barr;
 
 int* pProcInd; // массив номеров первой строки, расположенной на процессе
 int* pProcNum; // количество строк линейной системы, расположенных на процессе
@@ -126,21 +127,27 @@ void* ColumnElimination(void* blabla)
   
   }
   
-  double multiplier; 
 
-  //по строкам
-  for (int i = pProcInd[selfId]; i < pProcNum[selfId] + pProcInd[selfId]; ++i) 
+  for(int BaseRowInd = 0; BaseRowInd < mSize; ++BaseRowInd)
   {
-    if (BaseRowInd < i) // строка еще не была базовой
+    double multiplier; 
+
+    //по строкам
+    for (int i = pProcInd[selfId]; i < pProcNum[selfId] + pProcInd[selfId]; ++i) 
     {
-      multiplier = Rows[i * mSize + BaseRowInd] / Rows[BaseRowInd * mSize + BaseRowInd]; 
-      for (int j=BaseRowInd; j < mSize; ++j) 
+      if (BaseRowInd < i) // строка еще не была базовой
       {
-        Rows[i * mSize + j] -= Rows[BaseRowInd * mSize + j] * multiplier;
+        multiplier = Rows[i * mSize + BaseRowInd] / Rows[BaseRowInd * mSize + BaseRowInd]; 
+        for (int j=BaseRowInd; j < mSize; ++j) 
+        {
+          Rows[i * mSize + j] -= Rows[BaseRowInd * mSize + j] * multiplier;
+        }
+        pVector[i] -= pVector[BaseRowInd] * multiplier;
       }
-      pVector[i] -= pVector[BaseRowInd] * multiplier;
-    }
-  }    
+    } 
+    pthread_barrier_wait(&barr);
+  }
+     
 }
 
 
@@ -152,9 +159,9 @@ void* ColumnElimination(void* blabla)
  */
 void GaussianElimination (int mSize)
 {
-  for (int i = 0; i < mSize; ++i)  
-  {
-    BaseRowInd = i;    
+   
+    pthread_barrier_init(&barr, NULL, size);
+    
     //создаем нити
     for (int j = 0; j < size; ++j)
     {
@@ -167,8 +174,10 @@ void GaussianElimination (int mSize)
       {
         printf("join fails\n");fflush(stdout);
       }
-    }  
-  }
+    }
+
+    pthread_barrier_destroy(&barr);  
+  
 }
 
 void* BackThread(void * blabla)
@@ -186,14 +195,26 @@ void* BackThread(void * blabla)
     }
   
   }
-  // обновляем значения результирующего вектора
-  double val;
-  for (int j = pProcInd[selfId]; j < pProcNum[selfId] + pProcInd[selfId]; j++) 
+
+
+  for(int BaseRowInd = mSize - 1; BaseRowInd >= 0; --BaseRowInd)
   {
-    if (j < BaseRowInd) //sign changed
+    pthread_barrier_wait(&barr);
+    if(!selfId)
     {
-      val = Rows[j * mSize + BaseRowInd] * iterResult;
-      pVector[j] = pVector[j] - val;
+      iterResult = pVector[BaseRowInd] / Rows[BaseRowInd * mSize + BaseRowInd];
+      pResult[BaseRowInd] = iterResult;
+    }
+    pthread_barrier_wait(&barr);
+  // обновляем значения результирующего вектора
+    double val;
+    for (int j = pProcInd[selfId]; j < pProcNum[selfId] + pProcInd[selfId]; j++) 
+    {
+      if (j < BaseRowInd) //sign changed
+      {
+        val = Rows[j * mSize + BaseRowInd] * iterResult;
+        pVector[j] = pVector[j] - val;
+      }
     }
   }
 
@@ -208,15 +229,8 @@ void* BackThread(void * blabla)
  */
 void BackSubstitution () 
 {
-  for (int i = mSize - 1; i >= 0; --i) 
-  {
-    
-    // вычисляем неизвестное
-      iterResult = pVector[i] / Rows[i * mSize + i];
-      pResult[i] = iterResult;
-
-      BaseRowInd = i;
-     for (int j = 0; j < size; ++j)
+    pthread_barrier_init(&barr, NULL, size);
+    for (int j = 0; j < size; ++j)
     {
       pthread_create(&threadsId[j], NULL, &BackThread,NULL);
     }
@@ -227,9 +241,8 @@ void BackSubstitution ()
       {
         printf("join fails\n");fflush(stdout);
       }
-    }   
-   
-  }
+    }
+    pthread_barrier_destroy(&barr);
 }
 
 // просто освобождение памяти
