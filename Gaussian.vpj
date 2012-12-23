@@ -24,7 +24,7 @@
                 SaveOption="SaveCurrent"
                 RunFromDir="%rw">
                 <Exec
-                    CmdLine='g++ -c %xup -v -x c %defd -g %~other -o "%bd%n%oe" %i %f'
+                    CmdLine='g++ -c %xup -x c %defd -g %~other -o "%bd%n%oe" %i %f'
                     OtherOptions="-O1 -std=c99"/>
             </Target>
             <Target
@@ -36,7 +36,7 @@
                 Deletable="0"
                 SaveOption="SaveCurrent"
                 RunFromDir="%rw">
-                <Exec CmdLine='g++ %xup -v -g -o "%o" %objs'/>
+                <Exec CmdLine='g++ %xup -g -o "%o" %objs'/>
             </Target>
             <Target
                 Name="Build"
@@ -127,7 +127,7 @@
                 SaveOption="SaveCurrent"
                 RunFromDir="%rw">
                 <Exec
-                    CmdLine='g++ -c %xup -v -x c %defd %~other -o "%bd%n%oe" %i %f'
+                    CmdLine='g++ -c %xup -x c %defd %~other -o "%bd%n%oe" %i %f'
                     OtherOptions="-O1 -std=c99"/>
             </Target>
             <Target
@@ -139,7 +139,7 @@
                 Deletable="0"
                 SaveOption="SaveCurrent"
                 RunFromDir="%rw">
-                <Exec CmdLine='g++ %xup -v -o "%o" %objs'/>
+                <Exec CmdLine='g++ %xup -o "%o" %objs'/>
             </Target>
             <Target
                 Name="Build"
