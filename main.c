@@ -4,14 +4,16 @@
 #include <math.h>
 #include <mpi.h>
 #include <assert.h>
+#include <float.h>
 
 #define GAZI
-#define MY_RND (double)(rand() + 1) / RAND_MAX
+#define MY_RND (double)(rand() + 1) / RAND_MAX / 10
 //#define NDEBUG
 //#define HARD_CODE
 #ifndef NDEBUG
   #define LOG(msg, ...) printf(msg, ##__VA_ARGS__); \
-  printf("\n")
+  printf("\n"); \
+  fflush(stdout)
   double _start;
  
   #define START() _start = MPI_Wtime();
@@ -214,23 +216,27 @@ void GaussianElimination (int mSize)
     #ifdef GAZI
 	
      // find max col from i in i-th row
-    double MaxValue = -1;
+    double MaxValue = -DBL_MAX;
     int maxCol = -1;
     if( rank == baseRowRank)
 	{
-      for (int j = i; j < mSize; j++) 
+      for (int j = i + 1; j < mSize; j++) 
       {
-		  LOG("%f",pProcRows[baseRowPos * mSize + j]);
-          if (MaxValue < fabs(pProcRows[baseRowPos * mSize + j])) 
+		  LOG("proc rows 1 %f",pProcRows[baseRowPos * mSize + j]);
+          if (MaxValue < pProcRows[baseRowPos * mSize + j]) 
           {
-            MaxValue = fabs(pProcRows[baseRowPos * mSize + j]);
+            MaxValue = pProcRows[baseRowPos * mSize + j];
              maxCol = j; 
           }
-	}
-      assert(MaxValue > 0); // matrix must be not singular
-	  int temp = colShift[i];
+	     }
+       if(maxCol >= 0)
+       {
+      LOG("MaxValue %f", MaxValue);
+      //assert(MaxValue > 0); // matrix must be not singular
+	     int temp = colShift[i];
        colShift[i] = colShift[maxCol];
 	   colShift[maxCol] = temp;
+   }
     } 
     MPI_Bcast(colShift, mSize, MPI_INT, baseRowRank,MPI_COMM_WORLD);
      
@@ -252,6 +258,7 @@ void GaussianElimination (int mSize)
       for (int j = 0; j < mSize; ++j) 
       {
         pBaseRow[j] = pProcRows[baseRowPos * mSize + j];
+		LOG("ProcRows 2 %f",pProcRows[baseRowPos * mSize + j]);
       }
       pBaseRow[mSize] = pProcVector[baseRowPos];
 	}
